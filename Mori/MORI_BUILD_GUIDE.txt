@@ -1,0 +1,8 @@
+MORI ANDROID APP
+
+This project is a rebranded and redesigned version of the supplied Velune source.
+Visible app name: Mori
+Launcher logo: supplied Mori logo
+Build: GitHub Actions workflow .github/workflows/build-apk.yml
+Recommended build task: :app:assembleUniversalDebug
+APK artifact: Mori-universal-debug-apk
