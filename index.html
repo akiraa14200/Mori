@@ -149,5 +149,75 @@ Error generating stack: `+u.message+`
 </script>
   <script>(function(){function m(a){var h=a.getAttribute("href");if(!h)return;try{var u=new URL(h,document.baseURI);if((u.protocol==="http:"||u.protocol==="https:")&&u.host!==location.host){a.target="_blank";a.rel="noopener noreferrer";}}catch(e){}}function s(){document.querySelectorAll("a[href]").forEach(m);}if(document.readyState!=="loading"){s();}else{document.addEventListener("DOMContentLoaded",s);}document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("a[href]");if(a){m(a);}},true);})();</script>
   <script type="application/json" data-clippy-inline-media-manifest="1">{"version":1,"slots":[]}</script>
+
+<script>
+/* 7MANGA admin-only controls. Visibility is cosmetic; Supabase RLS remains the security boundary. */
+(() => {
+  const db = window.__7mangaSupabase;
+  if (!db) return;
+  let isAdmin = false;
+  window.__7mangaIsAdmin = false;
+
+  const updateMembership = async (session) => {
+    isAdmin = false;
+    window.__7mangaIsAdmin = false;
+    document.body.classList.remove("seven-admin");
+    if (session?.user?.id) {
+      try {
+        const { data, error } = await db.from("admin_users")
+          .select("user_id").eq("user_id", session.user.id).maybeSingle();
+        isAdmin = !error && !!data;
+      } catch (_) { isAdmin = false; }
+    }
+    window.__7mangaIsAdmin = isAdmin;
+    document.body.classList.toggle("seven-admin", isAdmin);
+    applyControlVisibility();
+  };
+
+  const controlKind = (button) => {
+    const label = (button.innerText || button.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+    if (label === "NEW TITLE" || label === "NEW" || label.includes("NEW TITLE")) return "create";
+    if (label === "EDIT") return "edit";
+    if (label === "DELETE") return "delete";
+    if (label === "+ ADD" || label === "ADD") return "character";
+    if (label.includes("SAVE TO 7MANGA")) return "save";
+    return "";
+  };
+
+  const applyControlVisibility = () => {
+    document.querySelectorAll("button").forEach(button => {
+      const kind = controlKind(button);
+      if (!kind) return;
+      button.dataset.sevenAdminControl = kind;
+      button.style.display = isAdmin ? "" : "none";
+      button.setAttribute("aria-hidden", isAdmin ? "false" : "true");
+      button.tabIndex = isAdmin ? 0 : -1;
+    });
+  };
+
+  document.addEventListener("click", event => {
+    const button = event.target?.closest?.("button");
+    if (!button) return;
+    const kind = controlKind(button);
+    if (kind && !window.__7mangaIsAdmin) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (kind === "create" || kind === "edit" || kind === "delete" || kind === "save") {
+        document.getElementById("seven-auth-trigger")?.click();
+        const message = document.getElementById("seven-auth-message");
+        if (message) message.textContent = "Sign in with an approved administrator account to manage titles.";
+      }
+    }
+  }, true);
+
+  const observer = new MutationObserver(applyControlVisibility);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  db.auth.getSession().then(({ data }) => updateMembership(data?.session || null));
+  db.auth.onAuthStateChange((_event, session) => {
+    setTimeout(() => updateMembership(session || null), 0);
+  });
+})();
+</script>
+
 </body>
 </html>
