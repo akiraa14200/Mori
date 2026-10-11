@@ -26,7 +26,7 @@ function decodeXml(value = '') {
 }
 
 function tagValue(xml, tag) {
-  const match = xml.match(new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '\s*>', 'i'));
+  const match = xml.match(new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + tag + '\\s*>', 'i'));
   return match ? decodeXml(match[1]).trim() : '';
 }
 
