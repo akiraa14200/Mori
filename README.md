@@ -13,3 +13,8 @@ A responsive dark manga/manhwa/manhua/anime catalog with a glassmorphic interfac
 4. Never put a service-role key in the browser or GitHub Pages variables.
 
 Without Supabase variables, the site uses demo content. The GitHub Actions workflow generates `config.js` at deploy time from repository Actions variables. Enable Pages with **GitHub Actions** as the source. The site URL will be `https://akiraa14200.github.io/Mori/`.
+
+
+## Beginner guide
+
+See [ADMIN_GUIDE.md](./ADMIN_GUIDE.md) for step-by-step instructions to create an administrator account, add titles, and troubleshoot image links.
