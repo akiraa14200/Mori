@@ -26,26 +26,25 @@ function decodeXml(value = '') {
 }
 
 function tagValue(xml, tag) {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = xml.match(new RegExp('<' + escaped + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + escaped + '\\s*>', 'i'));
+  const match = xml.match(new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '\s*>', 'i'));
   return match ? decodeXml(match[1]).trim() : '';
 }
 
 function cleanText(value) {
-  return decodeXml(value).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();
+  return decodeXml(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function getLink(block) {
-  const atom = block.match(/<link\\b[^>]*href=["']([^"']+)["'][^>]*>/i);
+  const atom = block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*>/i);
   return decodeXml(atom ? atom[1] : tagValue(block, 'link') || tagValue(block, 'guid'));
 }
 
 function getImage(block, description) {
-  const media = block.match(/<(?:media:content|media:thumbnail|enclosure)\\b[^>]*(?:url|href)=["']([^"']+)["'][^>]*\\/?\\s*>/i);
-  if (media && /^https?:\\/\\//i.test(decodeXml(media[1]))) return decodeXml(media[1]);
+  const media = block.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*(?:url|href)=["']([^"']+)["'][^>]*\/?\s*>/i);
+  if (media && /^https?:\/\//i.test(decodeXml(media[1]))) return decodeXml(media[1]);
   const html = decodeXml(description);
-  const embedded = html.match(/<img\\b[^>]*src=["']([^"']+)["']/i);
-  if (embedded && /^https?:\\/\\//i.test(embedded[1])) return embedded[1];
+  const embedded = html.match(/<img\b[^>]*src=["']([^"']+)["']/i);
+  if (embedded && /^https?:\/\//i.test(embedded[1])) return embedded[1];
   return '';
 }
 
@@ -56,8 +55,8 @@ async function fetchFeed(feed) {
   });
   if (!response.ok) throw new Error('Upstream feed returned HTTP ' + response.status);
   const xml = await response.text();
-  if (!xml || !/<(?:rss|feed|rdf:RDF)\\b/i.test(xml)) throw new Error('Upstream did not return RSS/Atom XML');
-  const blocks = xml.match(/<item\\b[\\s\\S]*?<\\/item\\s*>/gi) || xml.match(/<entry\\b[\\s\\S]*?<\\/entry\\s*>/gi) || [];
+  if (!xml || !/<(?:rss|feed|rdf:RDF)\b/i.test(xml)) throw new Error('Upstream did not return RSS/Atom XML');
+  const blocks = xml.match(/<item\b[\s\S]*?<\/item\s*>/gi) || xml.match(/<entry\b[\s\S]*?<\/entry\s*>/gi) || [];
   const items = blocks.map(block => {
     const title = cleanText(tagValue(block, 'title'));
     const link = getLink(block);
@@ -65,7 +64,7 @@ async function fetchFeed(feed) {
     const published = tagValue(block, 'pubDate') || tagValue(block, 'published') || tagValue(block, 'updated') || tagValue(block, 'dc:date');
     const source = cleanText(tagValue(block, 'source') || feed.label);
     const image = getImage(block, description);
-    if (!title || !/^https?:\\/\\//i.test(link)) return null;
+    if (!title || !/^https?:\/\//i.test(link)) return null;
     const parsedDate = Date.parse(published);
     if (Number.isFinite(parsedDate) && Date.now() - parsedDate > 14 * 86400000) return null;
     return {
