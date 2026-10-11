@@ -313,11 +313,13 @@ Error generating stack: `+u.message+`
    });
   }
   function addAniListButton(){
+   document.querySelectorAll(".seven-anilist-import").forEach(button=>button.remove());
+   if(!window.__7mangaIsAdmin){document.querySelectorAll("#root input[data-seven-anilist-ready]").forEach(input=>delete input.dataset.sevenAniListReady);return;}
    const inputs=Array.from(document.querySelectorAll("#root input")).filter(input=>input.offsetParent!==null);
    const titleInput=inputs.find(input=>/title/i.test(input.placeholder||"")||(input.parentElement&&/title/i.test(input.parentElement.innerText||"")));
    if(!titleInput||titleInput.dataset.sevenAniListReady)return;
    titleInput.dataset.sevenAniListReady="1";
-   const btn=el("button",{type:"button",class:"seven-mini-action"},"FETCH DETAILS FROM ANILIST");
+   const btn=el("button",{type:"button",class:"seven-mini-action seven-anilist-import"},"FETCH DETAILS FROM ANILIST");
    btn.style.cssText="display:block;margin:8px 0 12px";
    titleInput.insertAdjacentElement("afterend",btn);
    btn.onclick=async()=>{
@@ -344,12 +346,56 @@ Error generating stack: `+u.message+`
    };
   }
   const observer=new MutationObserver(()=>{addSaveButtons();addAniListButton()});
-  observer.observe(document.body,{childList:true,subtree:true});
+  observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
   addSaveButtons();addAniListButton();
  };
  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();
 </script>
+
+
+<style id="seven-mobile-layout-v2">
+/* Mobile-first 7MANGA layout correction: prevent clipped navigation, hero and modal forms. */
+*,*::before,*:after{box-sizing:border-box}
+html,body{width:100%;max-width:100%;overflow-x:clip}
+#root{width:100%;min-width:0;max-width:100%;overflow-x:clip}
+#root img{max-width:100%}
+#root input,#root textarea,#root select{max-width:100%;min-width:0}
+@media(max-width:760px){
+ body{font-size:14px}
+ #root .mx-auto{max-width:100%}
+ #root .max-w-\\[1440px\\],#root .max-w-\\[1280px\\],#root .max-w-\\[1200px\\],#root .max-w-\\[1100px\\]{width:100%;max-width:100%}
+ #root .px-5,#root .md\\:px-8{padding-left:14px!important;padding-right:14px!important}
+ #root .gap-6{gap:14px!important}
+ #root .mt-12{margin-top:24px!important}
+ #root header{max-width:100%;overflow:visible}
+ #root header .flex{min-width:0}
+ #root header input{width:clamp(100px,34vw,220px)!important}
+ #root header button{white-space:nowrap}
+ #root .fixed.inset-0{padding:0!important;align-items:flex-end!important}
+ #root .fixed.inset-0>div{width:100%!important;max-width:100%!important;max-height:90dvh!important;overflow-y:auto!important;border-radius:22px 22px 0 0!important}
+ #root .fixed.inset-0 form{min-width:0;width:100%}
+ #root .fixed.inset-0 input,#root .fixed.inset-0 textarea,#root .fixed.inset-0 select{width:100%;min-height:46px;font-size:16px!important}
+ #root .fixed.inset-0 .flex{flex-wrap:wrap}
+ #root .fixed.inset-0 button{max-width:100%;min-height:44px}
+ #root button,#root a{touch-action:manipulation}
+ #seven-auth-trigger{right:10px!important;bottom:10px!important;max-width:calc(50vw - 16px)}
+ #seven-about-open{left:10px!important;bottom:10px!important}
+ #seven-library-open{left:10px!important;bottom:54px!important}
+ #seven-about-panel,#seven-library-panel{padding:8px!important;align-items:flex-end!important}
+ #seven-about-panel .sheet,#seven-library-panel .sheet{width:100%!important;max-height:88dvh!important;padding:18px!important}
+}
+@media(max-width:420px){
+ #root header{gap:8px!important}
+ #root header input{width:34vw!important;min-width:84px!important}
+ #root h1{overflow-wrap:anywhere}
+ #root .text-5xl,#root .text-6xl,#root .text-7xl{font-size:clamp(2rem,9vw,3rem)!important;line-height:1.08!important}
+ #root .grid{min-width:0}
+ #root .fixed.inset-0 .px-8,#root .fixed.inset-0 .p-8{padding:16px!important}
+ #root .fixed.inset-0 .gap-4{gap:10px!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+</style>
 
 </body>
 </html>
