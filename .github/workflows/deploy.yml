@@ -15,16 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Configure public app settings
-        env:
-          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          SUPABASE_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          ADMIN_EMAILS: ${{ vars.VITE_ADMIN_EMAILS }}
-        run: |
-          node -e "const fs=require('fs'); fs.writeFileSync('config.js','window.APP_CONFIG='+JSON.stringify({supabaseUrl:process.env.SUPABASE_URL||'',supabaseKey:process.env.SUPABASE_KEY||'',adminEmails:process.env.ADMIN_EMAILS||''})+';')"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
