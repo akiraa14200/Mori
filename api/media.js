@@ -20,12 +20,6 @@ function awsEncode(value) {
 function encodePath(value) {
   return String(value).split('/').map(awsEncode).join('/');
 }
-function signKey(date) {
-  const kDate = hmac('AWS4' + SECRET_KEY, date);
-  const kRegion = hmac(kDate, REGION);
-  const kService = hmac(kRegion, 's3');
-  return hmac(hmac(kService, 'aws4_request'), 'unused');
-}
 function presign(method, key, contentType = '') {
   const endpoint = new URL(ENDPOINT);
   const host = endpoint.host;
@@ -34,7 +28,7 @@ function presign(method, key, contentType = '') {
   const dateStamp = amzDate.slice(0, 8);
   const scope = dateStamp + '/' + REGION + '/s3/aws4_request';
   const canonicalUri = (endpoint.pathname.replace(/\/$/, '') || '') + '/' + encodePath(BUCKET + '/' + key);
-  const headers = contentType ? 'content-type:' + contentType.trim() + '\nhost:' + host + '\n' : 'host:' + host + '\n';
+  const headers = contentType ? 'content-type:' + contentType.trim() + '\nhost:' + host : 'host:' + host;
   const signedHeaders = contentType ? 'content-type;host' : 'host';
   const params = {
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
