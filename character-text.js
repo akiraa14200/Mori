@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   const META_LABEL = /\b(?:Class|Relatives|Guild|Affiliation|Occupation|Hunter Rank|Rank|Blood Type|Level|Age|Height|Weight|Status|Species|Race|Gender|Nationality|Residence|Family|Parents|Siblings|Master|Teacher|Student|Team|Party|Organization|Title|Alias|Aliases|Birthday|Date of Birth)\s*:/ig;
-  const PROSE_START = /(?:\b[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3}\s+(?:is known|is a|is an|was a|was an|becomes|became|has become|possesses|serves|joins|leads|fights|lives|works|uses|can|will|has|had|was|is)\b|\b(?:He|She|They|It)\s+(?:is|was|has|had|becomes|became|can|will|would|possesses|serves|joins|leads|fights|lives|works|uses)\b)/i;
+  const PROSE_START = /(?:\b[A-Z][\w'’.-]*\s+[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,2}\s+(?:is known|is a|is an|was a|was an|becomes|became|has become|possesses|serves|joins|leads|fights|lives|works|uses|can|will|has|had|was|is)\b|\b(?:He|She|They|It)\s+(?:is|was|has|had|becomes|became|can|will|would|possesses|serves|joins|leads|fights|lives|works|uses)\b)/i;
   function decodeEntities(value) {
     if (typeof document !== 'undefined' && document.createElement) {
       const node = document.createElement('textarea');
@@ -18,7 +18,7 @@
     while ((label = META_LABEL.exec(line)) !== null) lastLabel = label.index;
     META_LABEL.lastIndex = 0;
     if (lastLabel < 0) return null;
-    const matcher = new RegExp(PROSE_START.source, 'ig');
+    const matcher = new RegExp('(?=(' + PROSE_START.source + '))', 'ig');
     let match, candidate = null;
     while ((match = matcher.exec(line)) !== null) {
       if (match.index > lastLabel) candidate = match;
