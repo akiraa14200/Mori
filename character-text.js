@@ -18,7 +18,7 @@
     while ((label = META_LABEL.exec(line)) !== null) lastLabel = label.index;
     META_LABEL.lastIndex = 0;
     if (lastLabel < 0) return null;
-    const matcher = new RegExp('^(?:' + PROSE_START.source + ')', 'i');
+    const matcher = new RegExp('^(?:' + PROSE_START.source + ')');
     let candidate = null, fallback = null;
     for (let index = lastLabel + 1; index < line.length; index++) {
       const actual = matcher.exec(line.slice(index));
