@@ -8,7 +8,7 @@ Mori is a responsive manga, manhwa, manhua, anime and light-novel catalogue with
 - Repository: https://github.com/akiraa14200/Mori
 - Supabase project: https://supabase.com/dashboard/project/moicrqcddmftjgwjqkvz
 
-Vercel is connected to the GitHub repository and deploys changes pushed to `main`. The GitHub Actions workflow also publishes a GitHub Pages copy; the Vercel URL above is the primary site.
+Vercel is connected to the GitHub repository and deploys changes pushed to `main`. GitHub Actions runs syntax/configuration checks on each push; Vercel is the deployment target.
 
 ## Supabase connection
 
