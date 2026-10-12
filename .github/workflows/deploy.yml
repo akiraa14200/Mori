@@ -2,20 +2,25 @@ name: Validate Mori
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: validate-main
+  group: validate-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Test character description normalization
+        run: node tests/character-text.test.js
       - name: Check serverless news API syntax
         run: node --check api/news.js
       - name: Check Cloudflare Worker module syntax

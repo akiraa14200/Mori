@@ -126,10 +126,12 @@ create table if not exists public.community_comment_reports (
 );
 
 create index if not exists titles_name_search_idx on public.titles using gin(to_tsvector('simple',name));
-create index if not exists titles_type_idx on public.titles(media_type);
 create index if not exists titles_status_idx on public.titles(status);
-create index if not exists titles_genres_idx on public.titles using gin(genres);
 create index if not exists characters_title_id_idx on public.characters(title_id);
+create index if not exists community_comment_reports_reporter_id_idx on public.community_comment_reports(reporter_id);
+create index if not exists community_comments_user_id_idx on public.community_comments(user_id);
+create index if not exists reading_progress_title_id_idx on public.reading_progress(title_id);
+create index if not exists user_library_title_id_idx on public.user_library(title_id);
 create index if not exists comments_title_created_idx on public.community_comments(title_id,created_at desc);
 create index if not exists comments_parent_id_idx on public.community_comments(parent_comment_id);
 create index if not exists reviews_title_created_idx on public.title_reviews(title_id,created_at desc);
@@ -201,7 +203,12 @@ create policy "Users update own profile" on public.profiles for update to authen
 drop policy if exists "Public can read site settings" on public.site_settings;
 create policy "Public can read site settings" on public.site_settings for select to anon,authenticated using (true);
 drop policy if exists "Admins manage site settings" on public.site_settings;
-create policy "Admins manage site settings" on public.site_settings for all to authenticated using (exists(select 1 from public.admin_users a where a.user_id=auth.uid())) with check (exists(select 1 from public.admin_users a where a.user_id=auth.uid()));
+drop policy if exists "Admins insert site settings" on public.site_settings;
+drop policy if exists "Admins update site settings" on public.site_settings;
+drop policy if exists "Admins delete site settings" on public.site_settings;
+create policy "Admins insert site settings" on public.site_settings for insert to authenticated with check (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
+create policy "Admins update site settings" on public.site_settings for update to authenticated using (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid()))) with check (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
+create policy "Admins delete site settings" on public.site_settings for delete to authenticated using (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
 drop policy if exists "Users read own progress" on public.reading_progress;
 create policy "Users read own progress" on public.reading_progress for select to authenticated using (auth.uid()=user_id);
 drop policy if exists "Users insert own progress" on public.reading_progress;
