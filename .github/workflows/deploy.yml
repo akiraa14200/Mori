@@ -18,6 +18,8 @@ jobs:
           node-version: 22
       - name: Check serverless news API syntax
         run: node --check api/news.js
+      - name: Check Cloudflare Worker module syntax
+        run: node --input-type=module --check < cloudflare/worker.js
       - name: Check inline browser JavaScript and required app files
         run: |
           node <<'NODE'
@@ -30,12 +32,12 @@ jobs:
             try { new Function(code); }
             catch (error) { throw new Error(`Inline script ${index + 1} failed syntax check: ${error.message}`); }
           });
-          for (const file of ['config.js', 'api/news.js', 'supabase/schema.sql']) {
+          for (const file of ['config.js', 'api/news.js', 'supabase/schema.sql', 'cloudflare/worker.js', 'cloudflare/schema.sql', 'cloudflare/wrangler.toml']) {
             if (!fs.existsSync(file)) throw new Error(`Required file missing: ${file}`);
           }
           const config = fs.readFileSync('config.js', 'utf8');
-          if (!config.includes('supabaseUrl') || !config.includes('supabaseKey')) {
-            throw new Error('Supabase browser configuration is incomplete');
+          if (!config.includes('supabaseUrl') || !config.includes('supabaseKey') || !config.includes('cloudflareD1Url')) {
+            throw new Error('Supabase or Cloudflare D1 browser configuration is incomplete');
           }
-          console.log(`Validated ${scripts.length} inline script(s) and required project files.`);
+          console.log(`Validated ${scripts.length} inline script(s), Cloudflare Worker syntax and required project files.`);
           NODE
