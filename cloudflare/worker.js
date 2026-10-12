@@ -6,6 +6,9 @@ async function syncCatalog(env){
  const runId=crypto.randomUUID(),now=new Date().toISOString();
  const [titles,characters]=await Promise.all([fetchAll(env,'titles','id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at'),fetchAll(env,'characters','id,title_id,name,role,description,image_url,created_at')]);
  if(!titles.length)throw new Error('Sync aborted: source catalogue is empty; existing D1 data preserved.');
+ // An empty character response is suspicious when the cache already contains character records.
+ // Preserve the previous character cache instead of silently deleting every profile on a transient upstream failure.
+ if(!characters.length){const existing=await env.DB.prepare('SELECT COUNT(*) AS count FROM characters').first();if(Number(existing&&existing.count||0)>0)throw new Error('Sync aborted: source characters are empty while D1 has cached characters; existing catalogue preserved.');}
  // Populate staging tables first. Any fetch or write failure leaves the live catalogue untouched.
  await env.DB.batch([
   env.DB.prepare('DROP TABLE IF EXISTS titles_stage'),
