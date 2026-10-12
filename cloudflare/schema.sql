@@ -18,3 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_titles_name ON titles(name);
 CREATE INDEX IF NOT EXISTS idx_titles_media_type ON titles(media_type);
 CREATE INDEX IF NOT EXISTS idx_titles_status ON titles(status);
 CREATE INDEX IF NOT EXISTS idx_characters_title_id ON characters(title_id);
+
+-- Keep the catalogue's newest-first pagination and per-title character lookups efficient.
+CREATE INDEX IF NOT EXISTS idx_titles_created_at_id ON titles(created_at DESC, id ASC);
+CREATE INDEX IF NOT EXISTS idx_characters_title_created_at ON characters(title_id, created_at DESC);
