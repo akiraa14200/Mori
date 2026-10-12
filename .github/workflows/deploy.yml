@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Test character description normalization
+        run: node tests/character-text.test.js
       - name: Check serverless news API syntax
         run: node --check api/news.js
       - name: Check Cloudflare Worker module syntax
