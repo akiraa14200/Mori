@@ -19,11 +19,17 @@
     META_LABEL.lastIndex = 0;
     if (lastLabel < 0) return null;
     const matcher = new RegExp('(?=(' + PROSE_START.source + '))', 'ig');
-    let match, candidate = null;
+    let match, candidate = null, fallback = null;
     while ((match = matcher.exec(line)) !== null) {
-      if (match.index > lastLabel) candidate = match;
+      if (match.index <= lastLabel) continue;
+      const actual = PROSE_START.exec(line.slice(match.index));
+      if (!actual) continue;
+      const verb = /\b(?:is known|is a|is an|was a|was an|becomes|became|has become|possesses|serves|joins|leads|fights|lives|works|uses|can|will|has|had|was|is)\b/i.exec(actual[0]);
+      const subject = verb ? actual[0].slice(0, verb.index).trim() : '';
+      if (subject.split(/\s+/).filter(Boolean).length >= 2) candidate = match;
+      else fallback = match;
     }
-    return candidate;
+    return candidate || fallback;
   }
   function cleanCharacterDescription(raw) {
     let value = String(raw || '');
