@@ -48,7 +48,7 @@ The existing live Worker already has these secrets configured. Do not replace th
 - `GET /api/titles?limit=1000` returns catalogue rows with JSON arrays and booleans normalized for the existing frontend.
 - `GET /api/characters?title_id=...` returns characters for a title.
 - Manual sync uses `POST /sync` with the `X-Sync-Secret` header. Never call it from browser code.
-- Sync fetches all source rows before applying the stale-row cleanup. Empty source results abort the run so a temporary upstream problem does not wipe the cache.
+- Sync fetches all source rows before applying the stale-row cleanup. An empty title source always aborts the run. If the source returns zero characters while D1 still has character records, the run also aborts and preserves the live title and character cache; the error is recorded in `/health` for diagnosis. Regression coverage is in `tests/worker-sync.test.js`.
 
 ## Important
 
