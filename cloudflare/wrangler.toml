@@ -1,0 +1,15 @@
+name = "mori-data"
+main = "worker.js"
+compatibility_date = "2026-10-12"
+workers_dev = true
+
+[vars]
+SUPABASE_URL = "https://moicrqcddmftjgwjqkvz.supabase.co"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mori-hybrid-cache"
+database_id = "9412f27c-b095-4bba-865b-325080af783f"
+
+[triggers]
+crons = ["*/15 * * * *"]
