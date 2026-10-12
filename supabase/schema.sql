@@ -126,10 +126,12 @@ create table if not exists public.community_comment_reports (
 );
 
 create index if not exists titles_name_search_idx on public.titles using gin(to_tsvector('simple',name));
-create index if not exists titles_type_idx on public.titles(media_type);
 create index if not exists titles_status_idx on public.titles(status);
-create index if not exists titles_genres_idx on public.titles using gin(genres);
 create index if not exists characters_title_id_idx on public.characters(title_id);
+create index if not exists community_comment_reports_reporter_id_idx on public.community_comment_reports(reporter_id);
+create index if not exists community_comments_user_id_idx on public.community_comments(user_id);
+create index if not exists reading_progress_title_id_idx on public.reading_progress(title_id);
+create index if not exists user_library_title_id_idx on public.user_library(title_id);
 create index if not exists comments_title_created_idx on public.community_comments(title_id,created_at desc);
 create index if not exists comments_parent_id_idx on public.community_comments(parent_comment_id);
 create index if not exists reviews_title_created_idx on public.title_reviews(title_id,created_at desc);
