@@ -1,70 +1,59 @@
-# 7manga — beginner admin guide
+# Mori — admin and troubleshooting guide
 
-This guide explains how to add titles to the 7manga catalog. The website reads title records from Supabase. You do not need to edit HTML every time you add a title.
+Primary site: https://mori-z-hub.vercel.app  
+Repository: https://github.com/akiraa14200/Mori  
+Supabase dashboard: https://supabase.com/dashboard/project/moicrqcddmftjgwjqkvz
 
-## 1. Open your website
+## 1. Create an administrator account
 
-Open: https://akiraa14200.github.io/Mori/
+1. Open Mori and choose **Sign in** → **Create account**.
+2. Confirm your email if Supabase requires it.
+3. In Supabase, open **Authentication → Users** and copy your account's **User UID**.
+4. Open **SQL Editor → New query** and run this query after replacing the placeholder:
 
-If the page does not load yet, open the repository's **Actions** tab on GitHub and check that the Pages workflow has a green check mark. The website files are in https://github.com/akiraa14200/Mori.
+   ```sql
+   insert into public.admin_users (user_id)
+   values ('YOUR_USER_UID')
+   on conflict (user_id) do nothing;
+   ```
 
-## 2. Create your administrator account (one time)
+5. Return to Mori, sign in, and open the Admin page. If access is not refreshed, tap **Check access again**.
 
-1. Open the website and tap **Sign in**.
-2. Enter your email and a password, then tap **Create account**.
-3. If Supabase asks you to confirm your email, open the confirmation email first.
-4. Open the Supabase dashboard: https://supabase.com/dashboard/project/moicrqcddmftjgwjqkvz
-5. Go to **Authentication → Users** and find your account. Copy its **User UID**.
-6. Open **SQL Editor → New query**, paste the SQL below, replace YOUR_USER_UID with your actual UID, and click **Run**:
+Mori checks admin membership using the authenticated user's UUID in `public.admin_users`. An email address or frontend setting by itself does not grant database permissions.
 
-~~~sql
-insert into public.admin_users (user_id)
-values ('YOUR_USER_UID')
-on conflict (user_id) do nothing;
-~~~
+## 2. Add or update a catalogue entry
 
-Only grant this to people you trust. Never share a Supabase service-role key or put one in the website.
+1. Sign in with the administrator account.
+2. Open **Admin** and choose **Add new entry**.
+3. You can fill the fields manually or use **Import from AniList** to search by title or ID.
+4. Review the imported title, media type, cover/banner URLs, synopsis, genres, status, year, staff, AniList ID and trailer URL. Correct any details that are missing or inaccurate.
+5. Save the entry. Verify it appears in the catalogue and opens correctly.
 
-> Important: the current site also checks the adminEmails list in config.js to show the admin controls. If you sign in but do not see **Add title**, the account email may need to be added to that setting too. The database permission above is still required for secure writes.
+The live database stores character records separately and links each one to a title. AniList imports may not provide every character detail, so do not assume missing values indicate a database failure.
 
-## 3. Add a manga/manhwa/anime entry
+## 3. Profiles and community uploads
 
-1. Open the website and **Sign in** with your administrator account.
-2. Tap **Add title**.
-3. Fill in the fields:
-   - **Title name** — the main title shown on the card.
-   - **Media type** — Manga, Manhwa, Manhua, Anime, Light Novel, or Web Novel.
-   - **Genres** — comma-separated, for example: Action, Fantasy, Adventure.
-   - **Status** — Ongoing, Completed, Hiatus, Upcoming, or Cancelled.
-   - **Cover image URL** — a direct, public link to the cover image.
-   - **Banner image URL** — a direct, public link to a wide banner (optional).
-   - **Author / studio** — author for manga/manhwa, or studio for anime.
-   - **Release year** — year the title began/released.
-   - **Rating** — a number from 0 to 10.
-   - **Chapters / episodes** — for example: 125 chapters or 24 episodes.
-   - **Synopsis** — a short description of the story.
-   - **Alternative names** — comma-separated alternate titles.
-4. Tap **Save title**. The title should be stored in Supabase and appear in the catalog.
+Reader profiles are stored in `public.profiles`. Profile avatars use the public `avatars` bucket; comment attachments use `community-media`. Both buckets accept JPG, PNG, WebP and GIF files up to the configured 8 MB bucket limit; the comment form applies its own GIF size limit.
 
-## 4. How to add cover and character pictures
+Uploads are scoped to a signed-in user's folder by Storage row-level security policies. If upload fails, check that the user is signed in and that the bucket and policies exist. Do not disable RLS to work around permission errors.
 
-Images are added by URL, not by selecting a picture from your phone in the current form.
+## 4. News and images
 
-1. Upload the image to a trusted image host that provides a **public direct image URL**.
-2. Copy the image address. It should point directly to the image file and open as an image when pasted into a browser.
-3. Paste that address into **Cover image URL** or **Banner image URL**.
+The news page requests `/api/news`, a Vercel serverless function that reads RSS feeds. Some publishers do not expose a thumbnail in their feed, and some remote image hosts block hotlinking. Mori now checks more RSS image attributes and retries a failed image through an image proxy once. Articles without a usable image may still appear without a thumbnail.
 
-For example, a direct link often ends in .jpg, .png, or .webp, though some hosts use image URLs without an extension. Avoid private or temporary links that require you to log in.
+To troubleshoot:
+- Open https://mori-z-hub.vercel.app/api/news and confirm it returns JSON with a `feeds` array.
+- If it returns an error, check the Vercel function logs; upstream feeds can be temporarily unavailable.
+- If JSON loads but a card has no image, that RSS item may not include a usable image URL.
 
-**Character pictures:** the current repository's visible Add title form does not yet include character fields, so character pictures cannot be added through that form at the moment. The database supports characters, but a character editor needs to be added to the website UI first. Do not try to add character pictures by editing random code.
+## 5. Supabase schema and security
 
-## 5. If something goes wrong
+The live project uses RLS for catalogue writes, profiles, personal libraries, reading progress, reviews, comments, likes, reports and storage uploads. Public reads are intentionally enabled for public catalogue and community content.
 
-- **No Add title button:** confirm you are signed in, your email is in config.js's adminEmails list, and your account UID was added to public.admin_users.
-- **Permission/RLS error:** make sure you ran the SQL in step 2 using the correct User UID.
-- **Image is blank:** check that the URL is public and opens directly in a browser.
-- **Title does not appear:** open Supabase → **Table Editor → titles** and check whether the record was saved. Refresh the website.
+For a new project, run `supabase/schema.sql` in Supabase SQL Editor. It now includes the application tables, RLS policies, image buckets and admin storage usage function. Re-running it creates missing objects and refreshes named policies without deleting catalogue data.
 
-## Fields supported by the database
+Never place a Supabase service-role/secret key in frontend code, and never disable RLS to fix a client-side error.
 
-Title records support name, alternative names, media type, synopsis, cover URL, banner URL, genres, themes, status, release year, season, rating, popularity, chapters, episodes, author, artist, studio, country, source URL, trending and featured flags. Character records support name, role, description and image URL, linked to a title. Some of these fields are in the database but are not yet exposed in the current website form.
+## 6. Deployment
+
+Push changes to the `main` branch. Vercel automatically builds the connected GitHub repository. Check the latest deployment and verify its state is **READY** before testing the production site.
