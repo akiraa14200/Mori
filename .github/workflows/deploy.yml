@@ -21,6 +21,8 @@ jobs:
           node-version: 22
       - name: Test character description normalization
         run: node tests/character-text.test.js
+      - name: Test D1 sync safety
+        run: node tests/worker-sync.test.js
       - name: Check serverless news API syntax
         run: node --check api/news.js
       - name: Check Cloudflare Worker module syntax
