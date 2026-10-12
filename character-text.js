@@ -21,6 +21,7 @@
     const matcher = new RegExp('^(?:' + PROSE_START.source + ')');
     let candidate = null, fallback = null;
     for (let index = lastLabel + 1; index < line.length; index++) {
+      if (index > 0 && /[\\w'’.-]/.test(line[index - 1])) continue;
       const actual = matcher.exec(line.slice(index));
       if (!actual) continue;
       const verb = /\b(?:is known|is a|is an|was a|was an|becomes|became|has become|possesses|serves|joins|leads|fights|lives|works|uses|can|will|has|had|was|is)\b/i.exec(actual[0]);
