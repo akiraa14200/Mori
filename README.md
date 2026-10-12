@@ -34,6 +34,14 @@ For a new Supabase project, run `supabase/schema.sql` in the SQL Editor. It is a
 
 Admin permissions are checked against `public.admin_users`; adding an email to frontend configuration does not grant administrator privileges.
 
+## Hybrid database: Supabase + Cloudflare D1
+
+Mori now uses Cloudflare D1 as an additional read cache for public titles and character metadata while keeping Supabase Postgres as the source of truth for authentication, profiles, reading progress, saved library, comments, reviews, likes, reports, settings and administrator writes. Public catalogue reads try D1 first and fall back to Supabase if the cache is unavailable.
+
+The live D1 database is `mori-hybrid-cache`; its Worker API is `https://mori-data.akiraa142007.workers.dev`. A scheduled Worker refreshes public catalogue rows every 15 minutes. No private user data is copied to D1. See [Cloudflare hybrid setup](cloudflare/README.md), [Worker source](cloudflare/worker.js), [D1 schema](cloudflare/schema.sql), and [Wrangler config](cloudflare/wrangler.toml).
+
+D1 is additional separate storage; it does not increase the quota of the Supabase project itself. Supabase remains canonical so cache lag or a D1 outage does not block sign-in, comments, profiles or admin writes.
+
 ## News
 
 The `/api/news` Vercel function fetches RSS feeds server-side. Image extraction supports RSS media thumbnails, media content, enclosures, and lazy-loaded image attributes; broken image URLs get one proxy retry before the image is hidden.
