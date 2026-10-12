@@ -305,7 +305,7 @@ async function saveTitle(id){if(!state.user){location.hash='#/account';return no
 async function submitComment(e){
  e.preventDefault();
  if(!state.user)return notify('Sign in to comment');
- const form=e.currentTarget,t=state.selected,status=form.querySelector('#comment-status'),body=form.elements.body.value.trim(),file=form.elements.media.files?.[0];
+ const form=e.currentTarget,t=state.selected,status=form.querySelector('#comment-status'),body=form.elements.body.value.trim(),file=form.elements.media.files?.[0],spoiler=!!form.elements.spoiler?.checked;
  if(!t?.id)return notify('Open an entry before commenting.');
  if(!body&&!file){status.textContent='Write a comment or attach an image.';return}
  if(body.length>3000){status.textContent='Comments must be 3,000 characters or fewer.';return}
