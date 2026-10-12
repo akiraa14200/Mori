@@ -8,10 +8,10 @@ async function syncCatalog(env){
  if(!titles.length)throw new Error('Sync aborted: source catalogue is empty; existing D1 data preserved.');
  // Populate staging tables first. Any fetch or write failure leaves the live catalogue untouched.
  await env.DB.batch([
-  env.DB.prepare('CREATE TABLE IF NOT EXISTS titles_stage AS SELECT * FROM titles WHERE 0'),
-  env.DB.prepare('CREATE TABLE IF NOT EXISTS characters_stage AS SELECT * FROM characters WHERE 0'),
-  env.DB.prepare('DELETE FROM titles_stage'),
-  env.DB.prepare('DELETE FROM characters_stage')
+  env.DB.prepare('DROP TABLE IF EXISTS titles_stage'),
+  env.DB.prepare('DROP TABLE IF EXISTS characters_stage'),
+  env.DB.prepare('CREATE TABLE titles_stage AS SELECT * FROM titles WHERE 0'),
+  env.DB.prepare('CREATE TABLE characters_stage AS SELECT * FROM characters WHERE 0')
  ]);
  const titleColumns='id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at,synced_at,sync_run_id';
  const characterColumns='id,title_id,name,role,description,image_url,created_at,synced_at,sync_run_id';
@@ -22,9 +22,9 @@ async function syncCatalog(env){
  // D1 batch is transactional: publish both tables together only after staging is complete.
  await env.DB.batch([
   env.DB.prepare('DELETE FROM titles'),
-  env.DB.prepare('INSERT INTO titles SELECT * FROM titles_stage WHERE sync_run_id = ?').bind(runId),
+  env.DB.prepare('INSERT INTO titles ('+titleColumns+') SELECT '+titleColumns+' FROM titles_stage WHERE sync_run_id = ?').bind(runId),
   env.DB.prepare('DELETE FROM characters'),
-  env.DB.prepare('INSERT INTO characters SELECT * FROM characters_stage WHERE sync_run_id = ?').bind(runId),
+  env.DB.prepare('INSERT INTO characters ('+characterColumns+') SELECT '+characterColumns+' FROM characters_stage WHERE sync_run_id = ?').bind(runId),
   env.DB.prepare("INSERT INTO sync_state(key,value,updated_at) VALUES('last_success',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(JSON.stringify({at:now,titles:titles.length,characters:characters.length}),now),
   env.DB.prepare("DELETE FROM sync_state WHERE key='last_error'"),
   env.DB.prepare('DELETE FROM titles_stage'),
