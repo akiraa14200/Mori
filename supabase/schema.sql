@@ -12,7 +12,7 @@ create table if not exists public.titles (
  banner_url text not null default '',
  genres text[] not null default '{}',
  themes text[] not null default '{}',
- status text not null default 'Ongoing' check (status in ('Ongoing','Completed','Hiatus','Upcoming','Cancelled')),
+ status text not null default 'Ongoing' check (status in ('Airing','Ongoing','Completed','Hiatus','Upcoming','Cancelled')),
  release_year integer,
  season text,
  rating numeric(3,1) check (rating is null or (rating >= 0 and rating <= 10)),
@@ -64,6 +64,14 @@ create table if not exists public.profiles (
  updated_at timestamptz not null default now(),
  bio text not null default '' check (char_length(bio) <= 280),
  banner_url text not null default ''
+);
+
+create table if not exists public.reader_follows (
+ follower_id uuid not null references auth.users(id) on delete cascade,
+ followed_id uuid not null references auth.users(id) on delete cascade,
+ created_at timestamptz not null default now(),
+ primary key (follower_id, followed_id),
+ check (follower_id <> followed_id)
 );
 
 create table if not exists public.site_settings (
@@ -126,6 +134,7 @@ create table if not exists public.community_comment_reports (
 );
 
 create index if not exists titles_name_search_idx on public.titles using gin(to_tsvector('simple',name));
+create index if not exists reader_follows_followed_id_idx on public.reader_follows(followed_id);
 create index if not exists titles_status_idx on public.titles(status);
 create index if not exists characters_title_id_idx on public.characters(title_id);
 create index if not exists community_comment_reports_reporter_id_idx on public.community_comment_reports(reporter_id);
@@ -156,6 +165,7 @@ alter table public.characters enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.user_library enable row level security;
 alter table public.profiles enable row level security;
+alter table public.reader_follows enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.reading_progress enable row level security;
 alter table public.title_reviews enable row level security;
@@ -198,6 +208,14 @@ drop policy if exists "Users create own profile" on public.profiles;
 create policy "Users create own profile" on public.profiles for insert to authenticated with check ((select auth.uid())=id);
 drop policy if exists "Users update own profile" on public.profiles;
 create policy "Users update own profile" on public.profiles for update to authenticated using ((select auth.uid())=id) with check ((select auth.uid())=id);
+
+-- Reader follows
+ drop policy if exists "Reader follows are visible" on public.reader_follows;
+create policy "Reader follows are visible" on public.reader_follows for select to anon,authenticated using (true);
+drop policy if exists "Users can follow readers" on public.reader_follows;
+create policy "Users can follow readers" on public.reader_follows for insert to authenticated with check ((select auth.uid())=follower_id and follower_id<>followed_id);
+drop policy if exists "Users can unfollow readers" on public.reader_follows;
+create policy "Users can unfollow readers" on public.reader_follows for delete to authenticated using ((select auth.uid())=follower_id);
 
 -- Settings and reading progress
 drop policy if exists "Public can read site settings" on public.site_settings;
