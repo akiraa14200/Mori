@@ -182,6 +182,7 @@ async function startup(){
     }
   }
   render();
+  if(state.route.startsWith('/title/')&&state.selected)loadEntryTrailer(state.selected);
   // Footer settings are non-essential and must not delay page content.
   try{
     const {data,error}=await withTimeout(db.from('site_settings').select('key,value').in('key',['social_links','footer_links']),'Footer settings',5000);
