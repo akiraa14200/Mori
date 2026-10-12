@@ -313,3 +313,6 @@ grant execute on function public.admin_storage_usage() to authenticated;
 
 -- To grant administrator access after signup:
 -- insert into public.admin_users(user_id) values ('YOUR_AUTH_USER_UUID') on conflict do nothing;
+
+-- Speed up public reader profile feeds sorted newest-first.
+CREATE INDEX IF NOT EXISTS community_comments_user_created_idx ON public.community_comments(user_id, created_at DESC);
