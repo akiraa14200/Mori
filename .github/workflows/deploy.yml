@@ -1,4 +1,4 @@
-name: Deploy 7manga to GitHub Pages
+name: Validate and deploy Mori
 on:
   push:
     branches: [main]
@@ -11,10 +11,36 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
+  validate-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check serverless news API syntax
+        run: node --check api/news.js
+      - name: Check inline browser JavaScript and required app files
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+            .map(match => match[1]).filter(code => code.trim());
+          if (!scripts.length) throw new Error('No inline application JavaScript found');
+          scripts.forEach((code, index) => {
+            try { new Function(code); }
+            catch (error) { throw new Error(`Inline script ${index + 1} failed syntax check: ${error.message}`); }
+          });
+          for (const file of ['config.js', 'api/news.js', 'supabase/schema.sql']) {
+            if (!fs.existsSync(file)) throw new Error(`Required file missing: ${file}`);
+          }
+          const config = fs.readFileSync('config.js', 'utf8');
+          if (!config.includes('supabaseUrl') || !config.includes('supabaseKey')) {
+            throw new Error('Supabase browser configuration is incomplete');
+          }
+          console.log(`Validated ${scripts.length} inline script(s) and required project files.`);
+          NODE
       - uses: actions/configure-pages@v5
         with:
           enablement: true
