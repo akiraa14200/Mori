@@ -1,0 +1,56 @@
+name: Validate inline JavaScript
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check inline scripts in index.html
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class InlineScriptParser(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=False)
+                  self.capture = False
+                  self.parts = []
+                  self.scripts = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower() == "script":
+                      self.capture = "src" not in dict(attrs)
+                      self.parts = []
+
+              def handle_data(self, data):
+                  if self.capture:
+                      self.parts.append(data)
+
+              def handle_endtag(self, tag):
+                  if tag.lower() == "script" and self.capture:
+                      self.scripts.append("".join(self.parts))
+                      self.capture = False
+                      self.parts = []
+
+          parser = InlineScriptParser()
+          parser.feed(Path("index.html").read_text(encoding="utf-8"))
+          scripts = [script for script in parser.scripts if script.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found to validate")
+          for index, script in enumerate(scripts, 1):
+              Path(f"/tmp/mori-inline-{index}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline script(s)")
+          PY
+          for file in /tmp/mori-inline-*.js; do
+            echo "Checking $file"
+            node --check "$file"
+          done
