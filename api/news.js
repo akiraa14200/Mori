@@ -40,12 +40,31 @@ function getLink(block) {
 }
 
 function getImage(block, description) {
-  const media = block.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*(?:url|href)=["']([^"']+)["'][^>]*\/?\s*>/i);
-  if (media && /^https?:\/\//i.test(decodeXml(media[1]))) return decodeXml(media[1]);
+  const tags = block.match(/<(?:media:thumbnail|media:content|enclosure)\b[^>]*\/?\s*>/gi) || [];
+  const candidates = [];
+  const attr = (tag, name) => {
+    const match = tag.match(new RegExp(name + "\\s*=\\s*['\"]([^'\"]+)['\"]", 'i'));
+    return match ? decodeXml(match[1]).trim() : '';
+  };
+  for (const tag of tags) {
+    const url = attr(tag, 'url') || attr(tag, 'href');
+    if (!/^https?:\/\//i.test(url)) continue;
+    const type = attr(tag, 'type').toLowerCase();
+    const medium = attr(tag, 'medium').toLowerCase();
+    const imageLike = type.startsWith('image/') || medium === 'image' || /\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(url);
+    const score = /<media:thumbnail\b/i.test(tag) ? 3 : imageLike ? 2 : /<media:content\b/i.test(tag) ? 1 : 0;
+    if (score) candidates.push({ url, score });
+  }
   const html = decodeXml(description);
-  const embedded = html.match(/<img\b[^>]*src=["']([^"']+)["']/i);
-  if (embedded && /^https?:\/\//i.test(embedded[1])) return embedded[1];
-  return '';
+  const imageTags = html.match(/<img\b[^>]*>/gi) || [];
+  for (const tag of imageTags) {
+    const src = attr(tag, 'src') || attr(tag, 'data-src') || attr(tag, 'data-original') || attr(tag, 'data-lazy-src') || attr(tag, 'data-original-src');
+    const srcset = attr(tag, 'srcset').split(',')[0].trim().split(/\s+/)[0];
+    const url = src || srcset;
+    if (/^https?:\/\//i.test(url)) candidates.push({ url, score: 4 });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]?.url || '';
 }
 
 async function fetchFeed(feed) {
