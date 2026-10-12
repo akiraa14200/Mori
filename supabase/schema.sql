@@ -203,7 +203,12 @@ create policy "Users update own profile" on public.profiles for update to authen
 drop policy if exists "Public can read site settings" on public.site_settings;
 create policy "Public can read site settings" on public.site_settings for select to anon,authenticated using (true);
 drop policy if exists "Admins manage site settings" on public.site_settings;
-create policy "Admins manage site settings" on public.site_settings for all to authenticated using (exists(select 1 from public.admin_users a where a.user_id=auth.uid())) with check (exists(select 1 from public.admin_users a where a.user_id=auth.uid()));
+drop policy if exists "Admins insert site settings" on public.site_settings;
+drop policy if exists "Admins update site settings" on public.site_settings;
+drop policy if exists "Admins delete site settings" on public.site_settings;
+create policy "Admins insert site settings" on public.site_settings for insert to authenticated with check (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
+create policy "Admins update site settings" on public.site_settings for update to authenticated using (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid()))) with check (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
+create policy "Admins delete site settings" on public.site_settings for delete to authenticated using (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
 drop policy if exists "Users read own progress" on public.reading_progress;
 create policy "Users read own progress" on public.reading_progress for select to authenticated using (auth.uid()=user_id);
 drop policy if exists "Users insert own progress" on public.reading_progress;
