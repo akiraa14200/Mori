@@ -11,6 +11,20 @@
     return value.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"')
       .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
   }
+  function proseAfterMetadata(line) {
+    let lastLabel = -1;
+    META_LABEL.lastIndex = 0;
+    let label;
+    while ((label = META_LABEL.exec(line)) !== null) lastLabel = label.index;
+    META_LABEL.lastIndex = 0;
+    if (lastLabel < 0) return null;
+    const matcher = new RegExp(PROSE_START.source, 'ig');
+    let match, candidate = null;
+    while ((match = matcher.exec(line)) !== null) {
+      if (match.index > lastLabel) candidate = match;
+    }
+    return candidate;
+  }
   function cleanCharacterDescription(raw) {
     let value = String(raw || '');
     if (!value.trim()) return '';
@@ -24,37 +38,22 @@
     value = decodeEntities(value);
     value = value.replace(/^\s{0,3}#{1,6}\s*/gm, '')
       .replace(/(?:__|\*\*|~~|~!|!~|\*|_)/g, '')
-      .replace(/\`{1,3}/g, '')
+      .replace(/[\x60]{1,3}/g, '')
       .replace(/\r/g, '\n');
     const lines = value.split(/\n+/).map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
     const proseLines = [];
     for (const line of lines) {
       META_LABEL.lastIndex = 0;
       const firstLabel = line.search(META_LABEL);
-      if (firstLabel === 0) {
-        const match = line.match(PROSE_START);
-        META_LABEL.lastIndex = 0;
-        if (match && match.index > 0 && META_LABEL.test(line.slice(0, match.index))) proseLines.push(line.slice(match.index).trim());
-        META_LABEL.lastIndex = 0;
+      META_LABEL.lastIndex = 0;
+      if (firstLabel >= 0) {
+        const prose = proseAfterMetadata(line);
+        if (prose) proseLines.push(line.slice(prose.index).trim());
         continue;
       }
-      if (firstLabel > 0) {
-        const match = line.match(PROSE_START);
-        META_LABEL.lastIndex = 0;
-        if (match && match.index > 0 && META_LABEL.test(line.slice(0, match.index))) {
-          proseLines.push(line.slice(match.index).trim());
-          continue;
-        }
-      }
-      META_LABEL.lastIndex = 0;
       proseLines.push(line);
     }
     value = proseLines.join(' ');
-    META_LABEL.lastIndex = 0;
-    const firstProse = value.match(PROSE_START);
-    const labelBeforeProse = firstProse && META_LABEL.test(value.slice(0, firstProse.index));
-    META_LABEL.lastIndex = 0;
-    if (labelBeforeProse) value = value.slice(firstProse.index);
     value = value.replace(/\b(?:Class|Relatives|Guild|Affiliation|Occupation|Hunter Rank|Rank|Blood Type)\s*:\s*/gi, '')
       .replace(/\s+/g, ' ').trim();
     return value;
