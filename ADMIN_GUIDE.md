@@ -25,11 +25,12 @@ Mori checks admin membership using the authenticated user's UUID in `public.admi
 
 1. Sign in with the administrator account.
 2. Open **Admin** and choose **Add new entry**.
-3. You can fill the fields manually or use **Import from AniList** to search by title or ID.
-4. Review the imported title, media type, cover/banner URLs, synopsis, genres, status, year, staff, AniList ID and trailer URL. Correct any details that are missing or inaccurate.
-5. Save the entry. Verify it appears in the catalogue and opens correctly.
+3. Use **Import catalogue metadata** and choose **Kitsu**, **MangaUpdates**, or **Wikidata**. Search by title and select **Use entry** on the best match.
+4. Review all imported fields and the source URL before saving. The importer deliberately does not copy synopsis text or automatically import character biographies. Wikidata structured facts are CC0; other providers have their own policies and coverage.
+5. Verify image reuse rights separately before publishing any cover/banner. An API returning an image does not itself grant permission to republish it. If rights are unclear, leave the image blank and use a placeholder or approved artwork.
+6. Save the entry and verify it appears in the catalogue and opens correctly. If one provider is unavailable, try another source or enter verified facts manually.
 
-The live database stores character records separately and links each one to a title. AniList imports may not provide every character detail, so do not assume missing values indicate a database failure.
+The live database stores character records separately and links each one to a title. Provider imports may not provide every field or character detail, so do not assume missing values indicate a database failure. The legacy AniList ID column is retained for compatibility with existing records; the admin importer now offers Kitsu, MangaUpdates, and Wikidata.
 
 ## 3. Profiles and community uploads
 
