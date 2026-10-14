@@ -91,17 +91,24 @@ async function searchWikidata(q, type) {
 }
 async function searchJikan(q, type) {
   const kind = type === "Anime" ? "anime" : "manga";
-  const json = await safeFetch("https://api.jikan.moe/v4/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10&sfw=true");
-  return (json.data || []).map(x => result({
-    provider:"jikan", provider_id:x.mal_id, name:x.title,
-    alternative_names:[x.title_english,x.title_japanese,...(x.titles || []).map(t => t.title)].filter(Boolean).filter(t => t !== x.title),
-    media_type:kind === "anime" ? "Anime" : "Manga", synopsis:x.synopsis,
-    cover_url:x.images?.webp?.large_image_url || x.images?.jpg?.large_image_url,
-    banner_url:"", genres:(x.genres || []).map(g => g.name), themes:(x.themes || []).map(g => g.name),
-    status:statusMap(x.status), release_year:x.year || x.published?.from?.slice(0,4),
-    chapters:x.chapters, episodes:x.episodes, source_url:x.url, rating:x.score,
-    source_note:"Jikan/MAL-derived metadata. Review source terms and image rights before publishing."
-  })).filter(x => x.name);
+  const json = await safeFetch("https://jikan.lucashdo.com/v1/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10");
+  const rows = Array.isArray(json.data) ? json.data : Array.isArray(json.data?.data) ? json.data.data : [];
+  return rows.map(x => {
+    const title = x.title || x.titleEnglish || x.title_english || x.titleJapanese || x.title_japanese || x.titlePreferred || "";
+    const images = x.images || {};
+    const imageUrl = images.webp?.large_image_url || images.jpg?.large_image_url || x.imageUrl || x.image || "";
+    const genres = (x.genres || []).map(g => typeof g === "string" ? g : g.name).filter(Boolean);
+    const themes = (x.themes || []).map(g => typeof g === "string" ? g : g.name).filter(Boolean);
+    return result({
+      provider:"jikan", provider_id:x.malId || x.mal_id || x.id, name:title,
+      alternative_names:[x.titleEnglish,x.title_english,x.titleJapanese,x.title_japanese,...(x.titles || []).map(t => typeof t === "string" ? t : t.title)].filter(Boolean).filter(t => t !== title),
+      media_type:kind === "anime" ? "Anime" : "Manga", synopsis:x.synopsis || x.description,
+      cover_url:imageUrl, banner_url:"", genres, themes,
+      status:statusMap(x.status), release_year:x.year || x.published?.from?.slice(0,4),
+      chapters:x.chapters, episodes:x.episodes, source_url:x.url || x.siteUrl, rating:x.score,
+      source_note:"Jikan-compatible community API (Jikan-Edge) / MyAnimeList-derived data. Verify source terms and artwork rights."
+    });
+  }).filter(x => x.name);
 }
 async function searchAniList(q, type) {
   const query = `query ($search: String, $type: MediaType) {
