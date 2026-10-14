@@ -178,7 +178,7 @@ async function searchAniList(q, type) {
     });
   }).filter(x => x.name);
 }
-export default async function handler(request) {
+async function handleCatalogueRequest(request) {
   if (request.method === "OPTIONS") return new Response(null,{status:204,headers:cors});
   if (request.method !== "GET") return reply({error:"Method not allowed"},405);
   const url = new URL(request.url), provider = clean(url.searchParams.get("provider")).toLowerCase();
@@ -197,5 +197,37 @@ export default async function handler(request) {
   } catch (error) {
     console.error("[catalogue-search]",provider,error);
     return reply({error:provider+" search failed: "+String(error?.message || error).slice(0,220),items:[]},502);
+  }
+}
+
+
+// Vercel's /api/*.js Node runtime expects (req, res). Keep the Fetch API
+// implementation above, but explicitly bridge its Response to Node's response
+// object so every provider uses the same working serverless route.
+export default async function handler(req, res) {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+  try {
+    const protocol = req.headers?.["x-forwarded-proto"] || "https";
+    const host = req.headers?.host || "localhost";
+    const requestUrl = new URL(req.url || "/", protocol + "://" + host);
+    const request = new Request(requestUrl, { method: req.method || "GET" });
+    const result = await handleCatalogueRequest(request);
+    res.statusCode = result.status || 200;
+    result.headers.forEach((value, key) => res.setHeader(key, value));
+    for (const [key, value] of Object.entries(headers)) {
+      if (!res.hasHeader(key)) res.setHeader(key, value);
+    }
+    const body = await result.text();
+    res.end(body);
+  } catch (error) {
+    console.error("[catalogue-search] serverless handler failure", error);
+    res.statusCode = 500;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.end(JSON.stringify({ error: "Catalogue API internal error: " + String(error?.message || error).slice(0, 180), items: [] }));
   }
 }
