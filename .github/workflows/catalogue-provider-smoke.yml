@@ -1,0 +1,120 @@
+name: Catalogue provider smoke tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/catalogue-search.js"
+      - ".github/workflows/catalogue-provider-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  provider-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test live catalogue providers with retries
+        run: |
+          node --input-type=module <<'NODE'
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const q = "Naruto";
+          const checks = [
+            {
+              name: "Kitsu",
+              run: async () => {
+                const u = "https://kitsu.io/api/edge/manga?filter%5Btext%5D=" + encodeURIComponent(q) + "&page%5Blimit%5D=3";
+                const r = await fetch(u, {headers: {Accept: "application/vnd.api+json"}, signal: AbortSignal.timeout(12000)});
+                const j = await r.json();
+                if (!r.ok) throw new Error("HTTP " + r.status + " " + JSON.stringify(j).slice(0,120));
+                return (j.data || []).length;
+              }
+            },
+            {
+              name: "MangaUpdates",
+              run: async () => {
+                const r = await fetch("https://api.mangaupdates.com/v1/series/search", {
+                  method: "POST",
+                  headers: {"Content-Type":"application/json","Accept":"application/json"},
+                  body: JSON.stringify({search:q, stype:"title", page:1, perpage:3}),
+                  signal: AbortSignal.timeout(12000)
+                });
+                const j = await r.json();
+                if (!r.ok) throw new Error("HTTP " + r.status + " " + JSON.stringify(j).slice(0,120));
+                return (j.results || j.data || []).length;
+              }
+            },
+            {
+              name: "Wikidata",
+              run: async () => {
+                const u = "https://www.wikidata.org/w/api.php?action=wbsearchentities&search=" + encodeURIComponent(q) + "&language=en&uselang=en&type=item&limit=3&format=json";
+                const r = await fetch(u, {headers: {"Accept":"application/json","Api-User-Agent":"7Manga/1.0 (https://github.com/akiraa14200/Mori)"}, signal: AbortSignal.timeout(12000)});
+                const j = await r.json();
+                if (!r.ok) throw new Error("HTTP " + r.status + " " + JSON.stringify(j).slice(0,120));
+                return (j.search || []).length;
+              }
+            },
+            {
+              name: "Jikan-compatible / Tenrai",
+              run: async () => {
+                const u = "https://api.tenrai.org/v1/manga?q=" + encodeURIComponent(q) + "&limit=3";
+                const r = await fetch(u, {signal: AbortSignal.timeout(12000)});
+                const j = await r.json();
+                if (!r.ok) throw new Error("HTTP " + r.status + " " + JSON.stringify(j).slice(0,120));
+                return (Array.isArray(j.data) ? j.data : j.data?.data || []).length;
+              }
+            },
+            {
+              name: "Jikan-Edge fallback",
+              run: async () => {
+                const u = "https://jikan.lucashdo.com/v1/manga?q=" + encodeURIComponent(q) + "&limit=3";
+                const r = await fetch(u, {signal: AbortSignal.timeout(12000)});
+                const j = await r.json();
+                if (!r.ok) throw new Error("HTTP " + r.status + " " + JSON.stringify(j).slice(0,120));
+                return (Array.isArray(j.data) ? j.data : j.data?.data || []).length;
+              }
+            },
+            {
+              name: "AniList",
+              run: async () => {
+                const query = 'query ($search: String, $type: MediaType) { Page(page: 1, perPage: 3) { media(search: $search, type: $type, sort: SEARCH_MATCH) { id title { romaji english } } } }';
+                const r = await fetch("https://graphql.anilist.co", {
+                  method: "POST",
+                  headers: {"Content-Type":"application/json","Accept":"application/json"},
+                  body: JSON.stringify({query, variables:{search:q,type:"MANGA"}}),
+                  signal: AbortSignal.timeout(12000)
+                });
+                const j = await r.json();
+                if (!r.ok || j.errors?.length) throw new Error("HTTP " + r.status + " " + (j.errors?.[0]?.message || JSON.stringify(j).slice(0,120)));
+                return (j.data?.Page?.media || []).length;
+              }
+            }
+          ];
+          let failed = 0;
+          for (const check of checks) {
+            let lastError = "";
+            let count = 0;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                count = await check.run();
+                if (count < 1) throw new Error("HTTP succeeded but returned zero results");
+                lastError = "";
+                break;
+              } catch (e) {
+                lastError = String(e?.message || e);
+                if (attempt < 3) await sleep(attempt * 1000);
+              }
+            }
+            if (lastError) {
+              failed++;
+              console.log("FAIL | " + check.name + " | " + lastError);
+            } else {
+              console.log("PASS | " + check.name + " | " + count + " results");
+            }
+          }
+          if (failed) {
+            console.log("SUMMARY | " + failed + " provider check(s) failed after 3 attempts.");
+            process.exitCode = 1;
+          } else {
+            console.log("SUMMARY | All live provider checks returned results.");
+          }
+          NODE
