@@ -419,7 +419,7 @@ async function searchCatalogueSource(form){
   const raw=await response.text();
   let payload;
   try{payload=JSON.parse(raw)}catch{const hint=response.status===401||response.status===403?'The API route may be blocked by deployment protection.':'The API route returned HTML or invalid JSON; check the deployed /api/catalogue-search function.';throw Error('HTTP '+response.status+'. '+hint+' Response: '+raw.slice(0,160).replace(/\\s+/g,' '))}
-  if(!response.ok)throw Error('HTTP '+response.status+': '+(payload.error||'Provider search failed'));
+  if(!response.ok){const err=payload.error;const message=typeof err==='string'?err:(err&&typeof err==='object'?(err.message||JSON.stringify(err)):String(err||'Provider search failed'));throw Error('HTTP '+response.status+': '+message)}
   const rows=payload.items||[];
   if(!rows.length){box.innerHTML='<div class="empty">No results found. Try another title or source.</div>';return}
   window.catalogueProviderResults=rows;
@@ -442,10 +442,26 @@ async function searchCatalogueSource(form){
    if(item.source_url)f.source_url.value=item.source_url;
    if(f.anilist_id)f.anilist_id.value='';
    window.pendingAniCharacters=[];
-   form.querySelector('#admin-status').textContent='Metadata from '+provider+' loaded. Synopsis was not imported automatically. Review source URL, artwork permissions and all fields, then save.';
+   const status=form.querySelector('#admin-status');
+   status.textContent='Metadata loaded. Fetching character details and portraits from AniList…';
    form.scrollIntoView({behavior:'smooth',block:'start'});
+   fetchAniListCharactersByTitle(item.name, item.media_type || f.media_type.value).then(chars=>{
+    window.pendingAniCharacters=chars;
+    status.textContent='Metadata loaded. '+chars.length+' character(s) with portrait(s)/descriptions found from AniList. Review fields and save to store the title and characters.';
+   }).catch(err=>{
+    console.warn('Character enrichment failed:',err);
+    status.textContent='Metadata loaded, but character lookup failed: '+(err?.message||'unknown error')+'. You can still save the title or fetch by AniList ID.';
+   });
   });
  }catch(e){box.innerHTML='<div class="empty">'+esc('Search failed: '+e.message)+'</div>'}
+}
+async function fetchAniListCharactersByTitle(title,mediaType){
+ const query='query ($search:String,$type:MediaType){Media(search:$search,type:$type,sort:SEARCH_MATCH){id title{romaji english native} characters(perPage:30,sort:ROLE){edges{role node{id name{full} image{large} description(asHtml:false)}}}}}';
+ const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{search:title,type:mediaType==='Anime'?'ANIME':'MANGA'}}),signal:AbortSignal.timeout(15000)});
+ const json=await res.json();
+ const m=json.data?.Media;
+ if(!res.ok||!m)throw Error(json.errors?.[0]?.message||'AniList could not find a matching title');
+ return (m.characters?.edges||[]).map(x=>({name:x.node?.name?.full||'',role:x.role||'Supporting',image_url:x.node?.image?.large||'',description:(x.node?.description||'').replace(/<[^>]*>/g,'').trim()})).filter(c=>c.name);
 }
 async function fetchAniList(form){const id=Number(form.elements.anilist_id.value);if(!id){notify('Enter an AniList ID first.');return}const status=form.querySelector('#admin-status');status.textContent='Fetching AniList metadata…';const query='query ($id:Int){Media(id:$id){id trailer{id site} title{romaji english native} synonyms description(asHtml:false) type format status startDate{year} averageScore popularity genres tags{name} coverImage{extraLarge large} bannerImage season seasonYear chapters episodes countryOfOrigin siteUrl staff(perPage:20,sort:RELEVANCE){edges{role node{name{full}}}} studios(isMain:true){nodes{name}} characters(perPage:30,sort:ROLE){edges{role node{name{full} image{large} description(asHtml:false)}}}}}';try{const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id}})});const json=await res.json();const m=json.data?.Media;if(!m)throw Error(json.errors?.[0]?.message||'No AniList title found');const f=form.elements;f.name.value=m.title.english||m.title.romaji||m.title.native||'';f.alternative_names.value=[m.title.romaji,m.title.native].filter(Boolean).filter(x=>x!==f.name.value).join(', ');f.synopsis.value=(m.description||'').replace(/<[^>]*>/g,'');f.genres.value=(m.genres||[]).join(', ');f.status.value=({'RELEASING':m.type==='ANIME'?'Airing':'Ongoing','FINISHED':'Completed','NOT_YET_RELEASED':'Upcoming','CANCELLED':'Cancelled','HIATUS':'Hiatus'})[m.status]||'Ongoing';f.release_year.value=m.startDate?.year||m.seasonYear||'';f.rating.value=m.averageScore?Math.round(m.averageScore/10*10)/10:'';f.chapters.value=m.chapters||'';f.episodes.value=m.episodes||'';f.country.value=m.countryOfOrigin||'';f.anilist_id.value=m.id;if(!f.trailer_url.value.trim()&&m.trailer?.id){const ts=String(m.trailer.site||'').toLowerCase();if(ts==='youtube')f.trailer_url.value='https://www.youtube.com/watch?v='+m.trailer.id;else if(ts==='dailymotion')f.trailer_url.value='https://www.dailymotion.com/video/'+m.trailer.id}if(!f.cover_url.value.trim())f.cover_url.value=m.coverImage?.extraLarge||m.coverImage?.large||'';if(!f.banner_url.value.trim())f.banner_url.value=m.bannerImage||'';if(!f.source_url.value.trim())f.source_url.value=m.siteUrl||('https://anilist.co/'+(m.type==='ANIME'?'anime':'manga')+'/'+m.id);const staff=m.staff?.edges||[];if(!f.author.value.trim())f.author.value=staff.find(x=>/story|original creator|writer/i.test(x.role))?.node?.name?.full||'';if(!f.artist.value.trim())f.artist.value=staff.find(x=>/art|illustration|artist/i.test(x.role))?.node?.name?.full||'';if(!f.studio.value.trim())f.studio.value=(m.studios?.nodes||[]).map(x=>x.name).join(', ');if(!f.themes.value.trim())f.themes.value=(m.tags||[]).filter(x=>x.name).map(x=>x.name).slice(0,20).join(', ');window.pendingAniCharacters=(m.characters?.edges||[]).map(x=>({name:x.node.name.full,role:x.role||'Supporting',image_url:x.node.image?.large||'',description:x.node.description||''}));status.textContent='AniList metadata loaded. Check/edit the name, cover URL and banner URL, then Save title. '+window.pendingAniCharacters.length+' characters fetched.'}catch(e){status.textContent='AniList fetch failed: '+e.message}}
 let searchDebounce=null;
