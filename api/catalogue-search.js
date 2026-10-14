@@ -90,7 +90,7 @@ async function searchMangaUpdates(q) {
     body:JSON.stringify({search:q,stype:"title",page:1,perpage:10})
   });
   const rows = Array.isArray(json) ? json : (json.results || json.data || []);
-  return rows.map(x => {
+  return rows.slice(0,10).map(x => {
     const s = x.record || x.series || x, image = s.image || {};
     const title = clean(s.title) || clean(s.name);
     const genres = Array.isArray(s.genres) ? s.genres.map(g => clean(g?.genre || g?.name || g)).filter(Boolean) : [];
@@ -115,7 +115,7 @@ async function searchWikidata(q, type) {
 }
 async function searchJikan(q, type) {
   const kind = type === "Anime" ? "anime" : "manga";
-  const mapRows = (rows, edge = false) => rows.map(x => {
+  const mapRows = (rows, edge = false) => rows.slice(0,10).map(x => {
     // Tenrai follows the Jikan v4 snake_case schema. Jikan-Edge uses camelCase.
     const title = x.title || x.title_english || x.titleEnglish || x.title_japanese || x.titleJapanese || x.titlePreferred || "";
     const images = x.images || {};
@@ -145,7 +145,7 @@ async function searchJikan(q, type) {
   } catch (primaryError) {
     console.warn("[catalogue-search] Tenrai failed; trying Jikan-Edge:", primaryError.message);
   }
-  const json = await safeFetch("https://jikan.lucashdo.com/v1/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10");
+  const json = await safeFetch("https://jikan.lucashdo.com/v1/" + kind + "?q=" + encodeURIComponent(q) + "&page=1");
   const rows = Array.isArray(json.data) ? json.data : Array.isArray(json.data?.data) ? json.data.data : [];
   return mapRows(rows, true);
 }
