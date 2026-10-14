@@ -26,8 +26,9 @@ const safeFetch = async (url, options = {}) => {
 };
 async function searchKitsu(q, type) {
   const kind = type === "Anime" ? "anime" : "manga";
-  const url = "https://kitsu.io/api/edge/" + kind + "?filter[text]=" + encodeURIComponent(q) + "&page[limit]=10&sort=-userCount";
+  const url = "https://kitsu.io/api/edge/" + kind + "?filter[text]=" + encodeURIComponent(q) + "&page[limit]=10&sort=-userCount&include=genres";
   const json = await safeFetch(url, { headers: { Accept: "application/vnd.api+json" } });
+  const included = new Map((json.included || []).filter((r) => r.type === "genres").map((r) => [String(r.id), clean(r.attributes?.name)]));
   return (json.data || []).map((x) => {
     const a = x.attributes || {};
     const titles = a.titles || {};
@@ -38,12 +39,12 @@ async function searchKitsu(q, type) {
       media_type: kind === "anime" ? "Anime" : "Manga",
       synopsis: "", cover_url: clean(a.posterImage?.large) || clean(a.posterImage?.original),
       banner_url: clean(a.coverImage?.large) || clean(a.coverImage?.original),
-      genres: [], themes: [], status: statusMap(a.status),
+      genres: (x.relationships?.genres?.data || []).map((g) => included.get(String(g.id))).filter(Boolean), themes: [], status: statusMap(a.status),
       release_year: Number(String(a.startDate || "").slice(0, 4)) || null,
       chapters: a.chapterCount == null ? "" : String(a.chapterCount),
       episodes: a.episodeCount == null ? "" : String(a.episodeCount),
       source_url: "https://kitsu.io/" + kind + "/" + x.id,
-      rating: a.averageRating ? Math.round(Number(a.averageRating) / 10) / 10 : null,
+      rating: a.averageRating ? Math.round(Number(a.averageRating) / 10) : null,
       source_note: "Kitsu metadata. Synopsis omitted; review artwork rights before publishing."
     };
   }).filter((x) => x.name);
