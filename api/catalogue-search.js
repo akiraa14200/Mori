@@ -19,13 +19,37 @@ const statusMap = (v) => {
   if (/current|releasing|publishing|ongoing|in progress/.test(s)) return "Ongoing";
   return "";
 };
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const safeFetch = async (url, options = {}) => {
-  const res = await fetch(url, { ...options, signal: AbortSignal.timeout(12000) });
-  if (!res.ok) {
-    const detail = (await res.text().catch(() => "")).slice(0, 120);
-    throw new Error("Upstream HTTP " + res.status + (detail ? ": " + detail : ""));
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(12000) });
+      if (res.ok) {
+        try { return await res.json(); }
+        catch { throw new Error("Upstream returned invalid JSON (HTTP " + res.status + ")"); }
+      }
+      const detail = (await res.text().catch(() => "")).replace(/\\s+/g, " ").slice(0, 100);
+      const error = new Error("Upstream HTTP " + res.status + (detail ? ": " + detail : ""));
+      error.status = res.status;
+      lastError = error;
+      // Retry only transient failures; do not repeat invalid requests.
+      if (attempt === 0 && [429, 500, 502, 503, 504].includes(res.status)) {
+        const retryAfter = Number(res.headers.get("retry-after"));
+        await pause(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 1800) : 700);
+        continue;
+      }
+      throw error;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0 && !error.status) {
+        await pause(250);
+        continue;
+      }
+      throw error;
+    }
   }
-  return res.json();
+  throw lastError || new Error("Upstream request failed");
 };
 const result = (v = {}) => ({
   provider: v.provider || "", provider_id: String(v.provider_id || ""), name: clean(v.name),
@@ -63,7 +87,7 @@ async function searchKitsu(q, type) {
 async function searchMangaUpdates(q) {
   const json = await safeFetch("https://api.mangaupdates.com/v1/series/search", {
     method:"POST", headers:{"Content-Type":"application/json","Accept":"application/json"},
-    body:JSON.stringify({search:{title:q},page:1,perpage:10})
+    body:JSON.stringify({search:q,stype:"title",page:1,perpage:10})
   });
   const rows = Array.isArray(json) ? json : (json.results || json.data || []);
   return rows.map(x => {
@@ -82,7 +106,7 @@ async function searchMangaUpdates(q) {
 }
 async function searchWikidata(q, type) {
   const url = "https://www.wikidata.org/w/api.php?action=wbsearchentities&search=" + encodeURIComponent(q) + "&language=en&uselang=en&type=item&limit=10&format=json";
-  const json = await safeFetch(url, {headers:{"Accept":"application/json","User-Agent":"7Manga metadata importer (public search)"}});
+  const json = await safeFetch(url, {headers:{"Accept":"application/json","Api-User-Agent":"7Manga/1.0 (https://github.com/akiraa14200/Mori)"}});
   return (json.search || []).map(x => result({
     provider:"wikidata", provider_id:x.id, name:x.label, media_type:type,
     source_url:x.concepturi || (x.id ? "https://www.wikidata.org/wiki/" + x.id : ""),
@@ -91,24 +115,39 @@ async function searchWikidata(q, type) {
 }
 async function searchJikan(q, type) {
   const kind = type === "Anime" ? "anime" : "manga";
-  const json = await safeFetch("https://jikan.lucashdo.com/v1/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10");
-  const rows = Array.isArray(json.data) ? json.data : Array.isArray(json.data?.data) ? json.data.data : [];
-  return rows.map(x => {
-    const title = x.title || x.titleEnglish || x.title_english || x.titleJapanese || x.title_japanese || x.titlePreferred || "";
+  const mapRows = (rows, edge = false) => rows.map(x => {
+    // Tenrai follows the Jikan v4 snake_case schema. Jikan-Edge uses camelCase.
+    const title = x.title || x.title_english || x.titleEnglish || x.title_japanese || x.titleJapanese || x.titlePreferred || "";
     const images = x.images || {};
-    const imageUrl = images.webp?.large_image_url || images.jpg?.large_image_url || x.imageUrl || x.image || "";
-    const genres = (x.genres || []).map(g => typeof g === "string" ? g : g.name).filter(Boolean);
-    const themes = (x.themes || []).map(g => typeof g === "string" ? g : g.name).filter(Boolean);
+    const imageUrl = images.webp?.large_image_url || images.jpg?.large_image_url || images.medium || x.imageUrl || x.image || "";
+    const genres = (x.genres || []).map(g => typeof g === "string" ? g : g?.name).filter(Boolean);
+    const themes = (x.themes || []).map(g => typeof g === "string" ? g : g?.name).filter(Boolean);
+    const malId = x.mal_id || x.malId || x.id;
     return result({
-      provider:"jikan", provider_id:x.malId || x.mal_id || x.id, name:title,
-      alternative_names:[x.titleEnglish,x.title_english,x.titleJapanese,x.title_japanese,...(x.titles || []).map(t => typeof t === "string" ? t : t.title)].filter(Boolean).filter(t => t !== title),
+      provider:"jikan", provider_id:malId, name:title,
+      alternative_names:[x.title_english,x.titleEnglish,x.title_japanese,x.titleJapanese,...(x.titles || []).map(t => typeof t === "string" ? t : t.title)].filter(Boolean).filter(t => t !== title),
       media_type:kind === "anime" ? "Anime" : "Manga", synopsis:x.synopsis || x.description,
       cover_url:imageUrl, banner_url:"", genres, themes,
-      status:statusMap(x.status), release_year:x.year || x.published?.from?.slice(0,4),
-      chapters:x.chapters, episodes:x.episodes, source_url:x.url || x.siteUrl, rating:x.score,
-      source_note:"Jikan-compatible community API (Jikan-Edge) / MyAnimeList-derived data. Verify source terms and artwork rights."
+      status:statusMap(x.status), release_year:x.year || x.published?.from?.year || x.published?.from?.slice?.(0,4) || x.aired?.from?.slice?.(0,4),
+      chapters:x.chapters, episodes:x.episodes, source_url:x.url || x.siteUrl || (malId ? "https://myanimelist.net/" + kind + "/" + malId : ""), rating:x.score,
+      source_note:edge
+        ? "Jikan-Edge community API / MyAnimeList-derived data. Review source terms and artwork rights."
+        : "Tenrai API (Jikan-compatible MyAnimeList catalogue data). Review source terms and artwork rights."
     });
   }).filter(x => x.name);
+  // Jikan's official public API was discontinued. Use the maintained Tenrai v1
+  // Jikan-compatible endpoint first, then the community Jikan-Edge endpoint.
+  try {
+    const json = await safeFetch("https://api.tenrai.org/v1/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10");
+    const rows = Array.isArray(json.data) ? json.data : Array.isArray(json.data?.data) ? json.data.data : [];
+    if (rows.length) return mapRows(rows);
+    // Empty results are legitimate, but try the alternate source in case its cache differs.
+  } catch (primaryError) {
+    console.warn("[catalogue-search] Tenrai failed; trying Jikan-Edge:", primaryError.message);
+  }
+  const json = await safeFetch("https://jikan.lucashdo.com/v1/" + kind + "?q=" + encodeURIComponent(q) + "&limit=10");
+  const rows = Array.isArray(json.data) ? json.data : Array.isArray(json.data?.data) ? json.data.data : [];
+  return mapRows(rows, true);
 }
 async function searchAniList(q, type) {
   const query = `query ($search: String, $type: MediaType) {
