@@ -236,7 +236,8 @@ async function handleCatalogueRequest(request) {
   if (request.method !== "GET") return reply({error:"Method not allowed"},405);
   const url = new URL(request.url), provider = clean(url.searchParams.get("provider")).toLowerCase();
   const q = clean(url.searchParams.get("q")).slice(0,120);
-  const requestedType = clean(url.searchParams.get("type"));\n  const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
+  const requestedType = clean(url.searchParams.get("type"));
+  const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
   if (!["kitsu","wikidata","mangaupdates","jikan","anilist","tmdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
   try {
