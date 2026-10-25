@@ -107,8 +107,9 @@
 .header-action-icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 #notifications-btn .notification-badge{right:-4px;top:-4px;min-width:19px;height:19px;border:2px solid #121218;box-shadow:0 2px 8px #0007}
 .header-avatar-btn{width:46px;height:46px;min-width:46px;padding:3px;display:grid;place-items:center;overflow:hidden;border-radius:50%;border:1px solid #ffffff30;background:linear-gradient(145deg,#ffffff20,#ffffff04);box-shadow:0 0 0 3px #ffffff05;position:relative}
-.header-avatar-btn .header-avatar{width:100%;height:100%;border:0;object-fit:cover;border-radius:50%;display:block}
-.avatar-signin-fallback{width:100%;height:100%;display:grid;place-items:center;border-radius:50%;font-size:15px;color:var(--accent);background:radial-gradient(circle at 30% 20%,#f2c94c22,transparent 60%),#ffffff08}
+.header-avatar-btn .header-avatar{position:absolute;inset:0;width:100%;height:100%;min-width:0;min-height:0;object-fit:cover;object-position:center;border:0;border-radius:50%;display:block;margin:0;padding:0;z-index:1}
+.avatar-signin-fallback{position:absolute;inset:0;width:100%;height:100%;display:grid;place-items:center;border-radius:50%;font-size:15px;color:var(--accent);background:radial-gradient(circle at 30% 20%,#f2c94c22,transparent 60%);z-index:0}
+.avatar-signin-fallback[hidden]{display:none!important}
 .profile-settings-v2 .profile-page-head{gap:14px}
 .profile-settings-v2-layout{grid-template-columns:minmax(0,1fr);gap:18px}
 .profile-live-preview{position:relative;top:auto;border-radius:28px;background:linear-gradient(155deg,#ffffff09,#ffffff02);box-shadow:0 20px 60px #0002}
