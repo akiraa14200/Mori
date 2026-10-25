@@ -203,42 +203,39 @@ async function searchTVMaze(q) {
     });
   }).filter(x => x.name);
 }
-async function searchTMDB(q, type) {
-  const apiKey = (process.env.TMDB_API_KEY || "").trim();
+async function searchOMDb(q, type) {
+  const apiKey = (process.env.OMDB_API_KEY || "").trim();
+  // Keep catalogue importing usable when no OMDb key is configured.
+  // TVmaze is the keyless TV source; Wikidata is the keyless movie entity fallback.
   if (!apiKey) {
-    // Keep importing usable without optional TMDB credentials.
     if (type === "TV Series") {
       const rows = await searchTVMaze(q);
-      return rows.map(x => ({ ...x, provider: "tvmaze", source_note: "TMDB_API_KEY is not configured, so this result came from TVmaze (free, no key). Credit TVmaze and comply with CC BY-SA terms." }));
+      return rows.map(x => ({ ...x, provider: "tvmaze", source_note: "OMDB_API_KEY is not configured, so this result came from TVmaze (free, no key). Credit TVmaze and comply with CC BY-SA terms." }));
     }
     if (type === "Movie") {
       const rows = await searchWikidata(q, "Movie");
-      return rows.map(x => ({ ...x, provider: "wikidata", media_type: "Movie", source_note: "TMDB_API_KEY is not configured, so this fallback came from Wikidata. Results may contain basic entity metadata only; verify the title and details before saving." }));
+      return rows.map(x => ({ ...x, provider: "wikidata", media_type: "Movie", source_note: "OMDB_API_KEY is not configured, so this fallback came from Wikidata. Results may contain basic entity metadata only; verify the title and details before saving." }));
     }
-    throw new Error("Choose Movie or TV Series for the automatic no-key fallback, or configure TMDB_API_KEY for TMDB results.");
+    throw new Error("Choose Movie or TV Series for the automatic no-key fallback, or configure OMDB_API_KEY for OMDb results.");
   }
-  const kind = type === "TV Series" ? "tv" : "movie";
-  const url = "https://api.themoviedb.org/3/search/" + kind + "?query=" + encodeURIComponent(q) + "&include_adult=false&language=en-US&page=1";
-  const json = await safeFetch(url, { headers: { Accept: "application/json", Authorization: "Bearer " + apiKey } });
-  const rows = Array.isArray(json.results) ? json.results : [];
+  const url = "https://www.omdbapi.com/?apikey=" + encodeURIComponent(apiKey) + "&s=" + encodeURIComponent(q) + "&type=" + (type === "TV Series" ? "series" : "movie") + "&page=1";
+  const json = await safeFetch(url, { headers: { Accept: "application/json" } });
+  if (json.Response === "False") {
+    if (/invalid api key/i.test(json.Error || "")) throw new Error("OMDb rejected OMDB_API_KEY. Check the key in Vercel Environment Variables and redeploy.");
+    if (/limit|request/i.test(json.Error || "")) throw new Error("OMDb request limit reached: " + clean(json.Error));
+    return [];
+  }
+  const rows = Array.isArray(json.Search) ? json.Search : [];
   return rows.slice(0,10).map(x => {
-    const isTV = kind === "tv";
-    const name = clean(isTV ? x.name : x.title);
-    const date = isTV ? x.first_air_date : x.release_date;
-    const path = x.poster_path;
-    const backdrop = x.backdrop_path;
-    const originalLanguage = clean(x.original_language).toUpperCase();
+    const isTV = x.Type === "series" || type === "TV Series";
+    const year = String(x.Year || "").match(/\\d{4}/)?.[0];
     return result({
-      provider:"tmdb", provider_id:x.id, name,
-      media_type:isTV ? "TV Series" : "Movie",
-      synopsis:x.overview || "",
-      cover_url:path ? "https://image.tmdb.org/t/p/w500" + path : "",
-      banner_url:backdrop ? "https://image.tmdb.org/t/p/w1280" + backdrop : "",
-      release_year:date ? Number(String(date).slice(0,4)) || null : null,
-      status:isTV ? (x.first_air_date ? "Ongoing" : "Upcoming") : (date && date.slice(0,4) <= String(new Date().getFullYear()) ? "Completed" : "Upcoming"),
-      rating:x.vote_average == null ? null : Math.round(Number(x.vote_average)*10)/10,
-      source_url:"https://www.themoviedb.org/" + kind + "/" + x.id,
-      source_note:"TMDB metadata · original language: " + (originalLanguage || "unknown") + ". Confirm country/category and review artwork rights before publishing."
+      provider: "omdb", provider_id: x.imdbID, name: x.Title,
+      media_type: isTV ? "TV Series" : "Movie",
+      cover_url: x.Poster && x.Poster !== "N/A" ? x.Poster : "",
+      release_year: year ? Number(year) : null,
+      source_url: x.imdbID ? "https://www.imdb.com/title/" + x.imdbID + "/" : "",
+      source_note: "OMDb search result (IMDb ID " + (x.imdbID || "unavailable") + "). Add OMDB_API_KEY in Vercel for full OMDb search; confirm metadata and artwork rights before publishing."
     });
   }).filter(x => x.name);
 }
@@ -250,14 +247,14 @@ async function handleCatalogueRequest(request) {
   const requestedType = clean(url.searchParams.get("type"));
   const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
-  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","tmdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
+  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","omdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
   try {
     let items;
     if (provider === "kitsu") items = await searchKitsu(q,type);
     else if (provider === "wikidata") items = await searchWikidata(q,type);
     else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
     else if (provider === "jikan") items = await searchJikan(q,type);
-    else if (provider === "tmdb") items = await searchTMDB(q,type);
+    else if (provider === "omdb") items = await searchOMDb(q,type);
     else if (provider === "tvmaze") {
       if (type !== "TV Series") throw new Error("TVmaze is a free provider for TV series only. Select TV Series as the media type.");
       items = await searchTVMaze(q);
