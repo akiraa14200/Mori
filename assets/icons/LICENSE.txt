@@ -1,0 +1,4 @@
+Lucide icons
+Source: https://github.com/lucide-icons/lucide
+License: ISC (see https://github.com/lucide-icons/lucide/blob/main/LICENSE)
+Icons included: house, newspaper, compass, bookmark, bell.
