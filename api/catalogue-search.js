@@ -220,6 +220,7 @@ async function handleCatalogueRequest(request) {
     else if (provider === "wikidata") items = await searchWikidata(q,type);
     else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
     else if (provider === "jikan") items = await searchJikan(q,type);
+    else if (provider === "tmdb") items = await searchTMDB(q,type);
     else items = await searchAniList(q,type);
     return reply({provider,items});
   } catch (error) {
