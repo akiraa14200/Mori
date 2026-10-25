@@ -205,7 +205,18 @@ async function searchTVMaze(q) {
 }
 async function searchTMDB(q, type) {
   const apiKey = (process.env.TMDB_API_KEY || "").trim();
-  if (!apiKey) throw new Error("TMDB is not configured yet. Add TMDB_API_KEY in Vercel Project Settings → Environment Variables, then redeploy.");
+  if (!apiKey) {
+    // Keep importing usable without optional TMDB credentials.
+    if (type === "TV Series") {
+      const rows = await searchTVMaze(q);
+      return rows.map(x => ({ ...x, provider: "tvmaze", source_note: "TMDB_API_KEY is not configured, so this result came from TVmaze (free, no key). Credit TVmaze and comply with CC BY-SA terms." }));
+    }
+    if (type === "Movie") {
+      const rows = await searchWikidata(q, "Movie");
+      return rows.map(x => ({ ...x, provider: "wikidata", media_type: "Movie", source_note: "TMDB_API_KEY is not configured, so this fallback came from Wikidata. Results may contain basic entity metadata only; verify the title and details before saving." }));
+    }
+    throw new Error("Choose Movie or TV Series for the automatic no-key fallback, or configure TMDB_API_KEY for TMDB results.");
+  }
   const kind = type === "TV Series" ? "tv" : "movie";
   const url = "https://api.themoviedb.org/3/search/" + kind + "?query=" + encodeURIComponent(q) + "&include_adult=false&language=en-US&page=1";
   const json = await safeFetch(url, { headers: { Accept: "application/json", Authorization: "Bearer " + apiKey } });
