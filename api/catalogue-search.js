@@ -203,6 +203,47 @@ async function searchTVMaze(q) {
     });
   }).filter(x => x.name);
 }
+
+async function searchIndianMovies(q) {
+  // Wikidata query restricted to films whose country of origin is India.
+  // Unlike a generic title search, this intentionally favours Indian cinema.
+  const term = JSON.stringify(q.toLowerCase());
+  const sparql = `SELECT DISTINCT ?item ?itemLabel ?date ?image ?imdb WHERE {
+    ?item wdt:P31/wdt:P279* wd:Q11424;
+          wdt:P495 wd:Q668;
+          rdfs:label ?label.
+    FILTER(LANG(?label) IN ("en","hi","ta","te","ml","kn","bn","mr"))
+    FILTER(CONTAINS(LCASE(STR(?label)), ${term}))
+    OPTIONAL { ?item wdt:P577 ?date. }
+    OPTIONAL { ?item wdt:P18 ?image. }
+    OPTIONAL { ?item wdt:P345 ?imdb. }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en,hi,ta,te,ml,kn,bn,mr". }
+  } LIMIT 20`;
+  const endpoint = "https://query.wikidata.org/sparql?query=" + encodeURIComponent(sparql) + "&format=json";
+  const json = await safeFetch(endpoint, {
+    headers: {
+      Accept: "application/sparql-results+json",
+      "User-Agent": "SUILibrary/1.0 (Indian movie catalogue search)"
+    }
+  });
+  const seen = new Set();
+  return (json.results?.bindings || []).map(row => {
+    const id = (row.item?.value || "").split("/").pop();
+    const name = clean(row.itemLabel?.value || row.label?.value);
+    if (!id || !name || seen.has(id)) return null;
+    seen.add(id);
+    const date = row.date?.value || "";
+    const imdb = row.imdb?.value || "";
+    return result({
+      provider: "wikidata-india", provider_id: id, name,
+      media_type: "Movie",
+      cover_url: row.image?.value || "",
+      release_year: date ? Number(date.slice(0,4)) || null : null,
+      source_url: imdb ? "https://www.imdb.com/title/" + imdb + "/" : "https://www.wikidata.org/wiki/" + id,
+      source_note: "Indian film search via Wikidata (country of origin: India). Metadata and poster availability vary; verify details before saving."
+    });
+  }).filter(Boolean).slice(0,10);
+}
 async function searchOMDb(q, type) {
   const apiKey = (process.env.OMDB_API_KEY || "").trim();
   // Keep catalogue importing usable when no OMDb key is configured.
@@ -247,11 +288,12 @@ async function handleCatalogueRequest(request) {
   const requestedType = clean(url.searchParams.get("type"));
   const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
-  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","omdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
+  if (!["kitsu","wikidata","wikidata-india","mangaupdates","jikan","anilist","omdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
   try {
     let items;
     if (provider === "kitsu") items = await searchKitsu(q,type);
     else if (provider === "wikidata") items = await searchWikidata(q,type);
+    else if (provider === "wikidata-india") items = await searchIndianMovies(q);
     else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
     else if (provider === "jikan") items = await searchJikan(q,type);
     else if (provider === "omdb") items = await searchOMDb(q,type);
