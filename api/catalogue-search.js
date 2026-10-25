@@ -178,6 +178,31 @@ async function searchAniList(q, type) {
     });
   }).filter(x => x.name);
 }
+async function searchTVMaze(q) {
+  // TVmaze's public show-search API is free and does not require an API key.
+  const json = await safeFetch("https://api.tvmaze.com/search/shows?q=" + encodeURIComponent(q));
+  return (Array.isArray(json) ? json : []).slice(0,10).map(row => {
+    const x = row.show || {}, image = x.image || {};
+    const premiered = clean(x.premiered);
+    const ended = clean(x.ended);
+    const genres = Array.isArray(x.genres) ? x.genres : [];
+    const rating = x.rating?.average;
+    const summary = clean(x.summary).replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim();
+    return result({
+      provider:"tvmaze", provider_id:x.id, name:x.name,
+      alternative_names:Array.isArray(x.aliases) ? x.aliases : [],
+      media_type:"TV Series", synopsis:summary,
+      cover_url:image.original || image.medium || "",
+      banner_url:"",
+      genres,
+      status:/ended|canceled/i.test(x.status || "") ? "Completed" : (/running|in development/i.test(x.status || "") ? "Ongoing" : statusMap(x.status)),
+      release_year:premiered ? Number(premiered.slice(0,4)) || null : null,
+      episodes:"", source_url:x.url || (x.id ? "https://www.tvmaze.com/shows/" + x.id : ""),
+      rating:rating == null ? null : Number(rating),
+      source_note:"TVmaze public API (free, no API key). Credit TVmaze and comply with its CC BY-SA licensing terms. Check image permissions before publishing."
+    });
+  }).filter(x => x.name);
+}
 async function searchTMDB(q, type) {
   const apiKey = (process.env.TMDB_API_KEY || "").trim();
   if (!apiKey) throw new Error("TMDB is not configured yet. Add TMDB_API_KEY in Vercel Project Settings → Environment Variables, then redeploy.");
@@ -213,7 +238,7 @@ async function handleCatalogueRequest(request) {
   const q = clean(url.searchParams.get("q")).slice(0,120);
   const requestedType = clean(url.searchParams.get("type"));\n  const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
-  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","tmdb"].includes(provider)) return reply({error:"Unknown provider."},400);
+  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","tmdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
   try {
     let items;
     if (provider === "kitsu") items = await searchKitsu(q,type);
@@ -221,6 +246,10 @@ async function handleCatalogueRequest(request) {
     else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
     else if (provider === "jikan") items = await searchJikan(q,type);
     else if (provider === "tmdb") items = await searchTMDB(q,type);
+    else if (provider === "tvmaze") {
+      if (type !== "TV Series") throw new Error("TVmaze is a free provider for TV series only. Select TV Series as the media type.");
+      items = await searchTVMaze(q);
+    }
     else items = await searchAniList(q,type);
     return reply({provider,items});
   } catch (error) {
