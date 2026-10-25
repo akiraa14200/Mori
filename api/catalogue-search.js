@@ -178,14 +178,42 @@ async function searchAniList(q, type) {
     });
   }).filter(x => x.name);
 }
+async function searchTMDB(q, type) {
+  const apiKey = (process.env.TMDB_API_KEY || "").trim();
+  if (!apiKey) throw new Error("TMDB is not configured yet. Add TMDB_API_KEY in Vercel Project Settings → Environment Variables, then redeploy.");
+  const kind = type === "TV Series" ? "tv" : "movie";
+  const url = "https://api.themoviedb.org/3/search/" + kind + "?query=" + encodeURIComponent(q) + "&include_adult=false&language=en-US&page=1";
+  const json = await safeFetch(url, { headers: { Accept: "application/json", Authorization: "Bearer " + apiKey } });
+  const rows = Array.isArray(json.results) ? json.results : [];
+  return rows.slice(0,10).map(x => {
+    const isTV = kind === "tv";
+    const name = clean(isTV ? x.name : x.title);
+    const date = isTV ? x.first_air_date : x.release_date;
+    const path = x.poster_path;
+    const backdrop = x.backdrop_path;
+    const originalLanguage = clean(x.original_language).toUpperCase();
+    return result({
+      provider:"tmdb", provider_id:x.id, name,
+      media_type:isTV ? "TV Series" : "Movie",
+      synopsis:x.overview || "",
+      cover_url:path ? "https://image.tmdb.org/t/p/w500" + path : "",
+      banner_url:backdrop ? "https://image.tmdb.org/t/p/w1280" + backdrop : "",
+      release_year:date ? Number(String(date).slice(0,4)) || null : null,
+      status:isTV ? (x.first_air_date ? "Ongoing" : "Upcoming") : (date && date.slice(0,4) <= String(new Date().getFullYear()) ? "Completed" : "Upcoming"),
+      rating:x.vote_average == null ? null : Math.round(Number(x.vote_average)*10)/10,
+      source_url:"https://www.themoviedb.org/" + kind + "/" + x.id,
+      source_note:"TMDB metadata · original language: " + (originalLanguage || "unknown") + ". Confirm country/category and review artwork rights before publishing."
+    });
+  }).filter(x => x.name);
+}
 async function handleCatalogueRequest(request) {
   if (request.method === "OPTIONS") return new Response(null,{status:204,headers:cors});
   if (request.method !== "GET") return reply({error:"Method not allowed"},405);
   const url = new URL(request.url), provider = clean(url.searchParams.get("provider")).toLowerCase();
   const q = clean(url.searchParams.get("q")).slice(0,120);
-  const type = url.searchParams.get("type") === "Anime" ? "Anime" : "Manga";
+  const requestedType = clean(url.searchParams.get("type"));\n  const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
-  if (!["kitsu","wikidata","mangaupdates","jikan","anilist"].includes(provider)) return reply({error:"Unknown provider."},400);
+  if (!["kitsu","wikidata","mangaupdates","jikan","anilist","tmdb"].includes(provider)) return reply({error:"Unknown provider."},400);
   try {
     let items;
     if (provider === "kitsu") items = await searchKitsu(q,type);
