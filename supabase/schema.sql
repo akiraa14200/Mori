@@ -218,8 +218,18 @@ drop policy if exists "Users can unfollow readers" on public.reader_follows;
 create policy "Users can unfollow readers" on public.reader_follows for delete to authenticated using ((select auth.uid())=follower_id);
 
 -- Settings and reading progress
+-- Public visitors can read only the settings needed to render footer links.
 drop policy if exists "Public can read site settings" on public.site_settings;
-create policy "Public can read site settings" on public.site_settings for select to anon,authenticated using (true);
+create policy "Public can read site settings" on public.site_settings
+ for select to anon,authenticated
+ using (key in ('social_links','footer_links'));
+
+-- Administrators can read all settings; admin-only writes remain separately protected.
+drop policy if exists "Admins can read all site settings" on public.site_settings;
+create policy "Admins can read all site settings" on public.site_settings
+ for select to authenticated
+ using (exists(select 1 from public.admin_users a where a.user_id=(select auth.uid())));
+
 drop policy if exists "Admins manage site settings" on public.site_settings;
 drop policy if exists "Admins insert site settings" on public.site_settings;
 drop policy if exists "Admins update site settings" on public.site_settings;
