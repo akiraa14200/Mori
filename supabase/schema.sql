@@ -33,6 +33,7 @@ create table if not exists public.titles (
 );
 alter table public.titles add column if not exists anilist_id integer;
 alter table public.titles add column if not exists trailer_url text;
+alter table public.titles add column if not exists read_url text;
 
 create table if not exists public.characters (
  id uuid primary key default gen_random_uuid(),
