@@ -647,7 +647,17 @@ async function removeAdminTitle(id){
   if(charactersError)throw new Error('Could not delete related characters: '+charactersError.message);
   const {error:titleError}=await db.from('titles').delete().eq('id',id);
   if(titleError)throw new Error('Could not delete title: '+titleError.message);
-  await loadTitles();render();notify('Title and related community data deleted');
+  // Remove it from the visible catalogue immediately instead of waiting for a full catalogue reload.
+  const isTarget=t=>String(t?.id)===String(id);
+  state.titles=state.titles.filter(t=>!isTarget(t));
+  state.titleIndex=state.titleIndex.filter(x=>!isTarget(x.t));
+  state.filtered=state.filtered.filter(t=>!isTarget(t));
+  state.recentTitles=(state.recentTitles||[]).filter(t=>!isTarget(t));
+  state.trendingTitles=(state.trendingTitles||[]).filter(t=>!isTarget(t));
+  state.heroTitles=(state.heroTitles||[]).filter(t=>!isTarget(t));
+  applyFilters();render();notify('Title and related community data deleted');
+  // Refresh catalogue in the background; don't block the UI on this network request.
+  loadTitles().then(()=>{if(state.route==='/admin'||state.route==='/')render()}).catch(e=>console.warn('Background catalogue refresh failed:',e));
  }catch(error){console.error('Title deletion failed:',error);notify('Delete failed: '+(error.message||'Please try again.'))}
 }
 async function searchCatalogueSource(form){
