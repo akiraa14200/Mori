@@ -660,17 +660,19 @@ async function routeChanged(){const route=location.hash.replace(/^#/, '')||'/';i
 db.auth.onAuthStateChange((event,session)=>{setTimeout(async()=>{try{await refreshUser();if(state.user)await ensureProfile();if(state.route.startsWith('/title/')&&state.selected)await loadEntryExtras(state.selected.id);render();if(state.route.startsWith('/title/')&&state.selected)loadEntryReleaseInfo(state.selected);if(state.user)checkLibraryReleaseAlerts();refreshNotificationBadge()}catch(error){console.error('Auth refresh failed',error);notify('Account refresh failed: '+(error?.message||'unknown error'))}},0)});
 function withTimeout(promise,label,ms=9000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out after '+ms+'ms')),ms))])}
 async function startup(){
-  // Render a usable shell immediately. Auth, catalogue and footer settings must never
-  // block the first paint; each service can fail independently.
+  // Render immediately, then load authentication and catalogue concurrently so a
+  // slow auth check cannot hold up the public catalogue.
   render();
-  try{
+  const authTask=(async()=>{try{
     await withTimeout(refreshUser(),'Authentication check',7000);
     if(state.user)await withTimeout(ensureProfile(),'Reader profile setup',7000);
   }catch(error){console.error('Startup auth/profile step failed:',error);state.user=state.user||null}
-  render();
-  try{
-    await withTimeout(loadTitles(),'Catalogue request',10000);
+  render()})();
+  const catalogueTask=(async()=>{try{
+    await withTimeout(loadTitles(),'Catalogue request',15000);
   }catch(error){console.error('Startup catalogue request failed:',error);notify('Catalogue is taking too long to respond. Please refresh in a moment.')}
+  render()})();
+  await Promise.allSettled([authTask,catalogueTask]);
   const initialRoute=location.hash.replace(/^#/, '')||'/';
   if(initialRoute.startsWith('/title/')){
     state.selected=state.titles.find(t=>String(t.id)===initialRoute.slice(7))||null;
