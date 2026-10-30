@@ -279,10 +279,14 @@ drop policy if exists "community_comment_reports_update_admin" on public.communi
 create policy "community_comment_reports_update_admin" on public.community_comment_reports for update to authenticated using (exists(select 1 from public.admin_users a where a.user_id=auth.uid())) with check (exists(select 1 from public.admin_users a where a.user_id=auth.uid()));
 
 -- Public image buckets; uploads remain scoped to each signed-in user's folder.
+-- Enforce storage restrictions even when buckets already existed.
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
 values ('community-media','community-media',true,8388608,array['image/jpeg','image/png','image/webp','image/gif']),
        ('avatars','avatars',true,8388608,array['image/jpeg','image/png','image/webp','image/gif'])
-on conflict (id) do nothing;
+on conflict (id) do update
+set file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types,
+    public = excluded.public;
 drop policy if exists "Public read community media" on storage.objects;
 create policy "Public read community media" on storage.objects for select to anon,authenticated using (bucket_id='community-media');
 drop policy if exists "Signed-in upload community media" on storage.objects;
