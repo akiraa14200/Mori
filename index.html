@@ -181,6 +181,11 @@ input,select,textarea{min-width:0;max-width:100%}
  .mobile-nav button{font-size:9px}
 }
 
+
+/* Stability fix: prevent whole-page fade/blur replays during client-side navigation and data updates. */
+#app > *:not(.loading){animation:none!important;filter:none!important;}
+#app .entry-tab-panel:not(.hidden){animation:none!important;}
+#app .entry, #app .entry-hero, #app .entry-intro{opacity:1!important;}
 </style>
 </head>
 <body>
