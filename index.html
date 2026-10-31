@@ -218,16 +218,29 @@ async function loadCharacterSearchIndex(){
  if(characterSearchPromise)return characterSearchPromise;
  characterSearchPromise=(async()=>{
   try{
-   const all=[];for(let from=0;from<100000;from+=1000){
-    const {data,error}=await db.from('characters').select('id,title_id,name,full_name,alternative_names').order('id',{ascending:true}).range(from,from+999);
-    if(error)throw error;all.push(...(data||[]));if(!data||data.length<1000)break;
-   }
+   // Use the existing character rows without assuming optional column names.
+   const {data,error}=await db.from('characters').select('*').limit(5000);
+   if(error)throw error;
    const byTitle=new Map();
-   all.forEach(c=>{if(!c.title_id)return;const names=[c.name,c.full_name,...(Array.isArray(c.alternative_names)?c.alternative_names:[])].filter(Boolean);if(!names.length)return;const key=String(c.title_id);const list=byTitle.get(key)||[];names.forEach(n=>list.push(String(n)));byTitle.set(key,list)});
-   state.titleIndex.forEach(x=>{const raw=[...new Set(byTitle.get(String(x.t.id))||[])];x.characterNames=raw.map(n=>RykoUtils.normalizeSearchText(n));if(raw.length)x.text+=' '+raw.join(' ').toLocaleLowerCase()});
-   state.characterSearchLoaded=true;applyFilters();
+   (data||[]).forEach(c=>{
+    const titleId=c.title_id??c.entry_id??c.titleId;
+    if(titleId==null)return;
+    const raw=[c.name,c.character_name,c.full_name,c.display_name,c.romaji,c.native_name];
+    if(Array.isArray(c.alternative_names))raw.push(...c.alternative_names);
+    if(Array.isArray(c.aliases))raw.push(...c.aliases);
+    const names=[...new Set(raw.filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim()))];
+    if(!names.length)return;
+    const key=String(titleId),list=byTitle.get(key)||[];
+    list.push(...names);byTitle.set(key,list);
+   });
+   state.titleIndex.forEach(x=>{
+    const raw=[...new Set(byTitle.get(String(x.t.id))||[])];
+    x.characterNames=raw.map(n=>RykoUtils.normalizeSearchText(n)).filter(Boolean);
+   });
+   state.characterSearchLoaded=true;
+   applyFilters();
    if(state.search.trim().length>=2)showSearchSuggestions();
-  }catch(error){console.warn('Character search index unavailable:',error.message)}
+  }catch(error){console.warn('Character search index unavailable:',error);state.characterSearchLoaded=false}
  })().finally(()=>{characterSearchPromise=null});
  return characterSearchPromise;
 }
