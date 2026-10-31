@@ -1213,8 +1213,8 @@ async function startup(){
     await withTimeout(loadTitles(),'Catalogue request',15000);
   }catch(error){console.error('Startup catalogue request failed:',error);notify(state.titles.length?'Showing saved catalogue entries while the database reconnects.':'Catalogue is taking too long to respond. Please refresh in a moment.')}
   })();
-  // If a recent catalogue is cached locally, show it while the network refresh runs.
-  if(state.titles.length)render();
+  // Keep the loading shell visible until auth and catalogue are ready.
+  // Rendering a cached catalogue here and again below caused the homepage to refresh twice.
   await Promise.allSettled([authTask,catalogueTask]);
   const initialRoute=location.hash.replace(/^#/, '')||'/';
   if(initialRoute.startsWith('/title/')){
