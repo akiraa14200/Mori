@@ -776,10 +776,10 @@ textarea{overflow:auto}
 }
 
 /* Restore the original homepage carousel visuals and reduce expensive paint work. */
-/* Keep homepage carousel pagination at its original compact size. */
-.hero .dots{gap:5px;margin-top:5px}
-.hero .dot{width:15px;height:3px;border-radius:9px;padding:0}
-.hero .dot.active{width:25px;height:3px}
+/* Keep carousel pagination as compact horizontal lines. */
+.hero .dots{display:flex;align-items:center;gap:6px;margin-top:5px}
+.hero .dot{display:block;width:18px;height:3px;min-width:18px;border-radius:9px;padding:0;flex:0 0 18px}
+.hero .dot.active{width:28px;height:3px;min-width:28px;flex-basis:28px}
 
 .single-video-placeholder{background-image:radial-gradient(ellipse at center,#34343d 0%,#111116 70%)}
 .single-video-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
