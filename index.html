@@ -358,6 +358,42 @@ input,select,textarea{min-width:0;max-width:100%}
  .character-page-main h1{font-size:21px}
 }
 
+
+/* Mobile discussion layout: keep comment identity, timestamps and actions readable. */
+.review-head{min-width:0;align-items:flex-start}
+.review-head>.profile-link{display:flex;align-items:center;gap:9px;min-width:0;flex:1;color:inherit;text-decoration:none}
+.review-head>.profile-link>span{min-width:0;overflow-wrap:anywhere}
+.review-head time{max-width:38%;white-space:normal;text-align:right;line-height:1.4}
+.review-body{overflow-wrap:anywhere}
+.review>img{display:block;width:auto;max-width:100%;height:auto}
+.comment-actions{align-items:center}
+.comment-actions .chip{min-height:36px}
+@media(max-width:600px){
+ .review{padding:12px;border-radius:13px}
+ .review-head{gap:8px}
+ .review-head .profile-avatar{width:34px;height:34px;flex:none}
+ .review-head time{font-size:10px;max-width:34%}
+ .review-body{font-size:13px;line-height:1.65}
+ .comment-actions{display:flex;gap:6px}
+ .comment-actions .chip{padding:8px 10px;font-size:11px}
+ .comment-reply-wrap{margin-left:10px;padding-left:9px}
+ .reply-card{padding:10px}
+ .comment-thread-toggle{max-width:100%;white-space:normal;text-align:left}
+ .comment-inline-reply{padding:10px}
+ .comment-inline-reply .comment-actions{justify-content:stretch}
+ .comment-inline-reply .comment-actions>*{flex:1;min-height:40px}
+ .spoiler-warning{align-items:flex-start;flex-wrap:wrap}
+ .comment-composer-foot{align-items:stretch;gap:9px}
+ .comment-composer-foot .field{flex:1;min-width:0}
+ .comment-composer-foot .field select{max-width:none;width:100%}
+ .comment-composer-foot .spoiler-toggle{align-self:center}
+}
+@media(max-width:360px){
+ .review-head time{max-width:30%;font-size:9px}
+ .comment-actions .chip{padding:8px;font-size:10px}
+ .comment-reply-wrap{margin-left:6px;padding-left:7px}
+}
+
 </style>
 </head>
 <body>
