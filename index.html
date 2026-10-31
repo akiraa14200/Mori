@@ -333,6 +333,31 @@ input,select,textarea{min-width:0;max-width:100%}
  .related-video-grid{grid-template-columns:1fr}
 }
 
+
+/* Character directory and related-character cards on narrow screens. */
+.characters{min-width:0}
+.character{min-width:0}
+.character>div{min-width:0;overflow-wrap:anywhere}
+.character strong{line-height:1.4;overflow-wrap:anywhere}
+.character span{display:block;line-height:1.45;overflow-wrap:anywhere}
+.character img{background:#17171d}
+@media(max-width:600px){
+ .characters{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:9px}
+ .character img{height:clamp(112px,36vw,150px)}
+ .character>div{padding:9px}
+ .character strong{font-size:11px}
+ .character-open-link{font-size:10px;line-height:1.4}
+ .character-page-top{align-items:start}
+ .character-page-portrait{max-height:180px}
+ .character-page-section .characters{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}
+}
+@media(max-width:360px){
+ .characters,.character-page-section .characters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .character-page-top{grid-template-columns:88px minmax(0,1fr);gap:10px;padding:12px}
+ .character-page-portrait{height:132px}
+ .character-page-main h1{font-size:21px}
+}
+
 </style>
 </head>
 <body>
