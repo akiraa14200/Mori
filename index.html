@@ -566,15 +566,20 @@ function hero(){const list=state.heroTitles.length?state.heroTitles:state.titles
 function recommendedTitles(){
  const saved=state.titles.filter(t=>state.library.has(t.id));
  const reading=state.titles.filter(t=>state.progress.get(t.id)?.reading_status==='Reading');
- const signals=[...saved,...reading];
+ const viewed=state.recentViewed.map(id=>state.titles.find(t=>String(t.id)===String(id))).filter(Boolean);
+ const signalMap=new Map();
+ [...saved,...reading].forEach(t=>signalMap.set(String(t.id),{title:t,weight:1}));
+ viewed.forEach(t=>{const key=String(t.id),existing=signalMap.get(key);if(existing)existing.weight=Math.max(existing.weight,0.5);else signalMap.set(key,{title:t,weight:0.5})});
+ const signals=[...signalMap.values()];
  const affinity=new Map();
  const add=(value,weight)=>{const key=String(value||'').trim().toLowerCase();if(key)affinity.set(key,(affinity.get(key)||0)+weight)};
- signals.forEach(t=>{
-  (t.genres||[]).forEach(x=>add(x,5));
-  (t.themes||[]).forEach(x=>add(x,3));
-  add(media(t),2);
+ signals.forEach(({title:t,weight})=>{
+  (t.genres||[]).forEach(x=>add(x,5*weight));
+  (t.themes||[]).forEach(x=>add(x,3*weight));
+  add(media(t),2*weight);
  });
- const candidates=state.titles.filter(t=>!state.library.has(t.id));
+ const viewedIds=new Set(viewed.map(t=>String(t.id)));
+ const candidates=state.titles.filter(t=>!state.library.has(t.id)&&!viewedIds.has(String(t.id)));
  const ranked=candidates.map(t=>{
   let match=0;
   (t.genres||[]).forEach(x=>match+=affinity.get(String(x).toLowerCase())||0);
@@ -596,7 +601,7 @@ function recommendedTitles(){
 }
 function updateHeroSlide(){const h=document.querySelector('#app .hero');if(!h)return;const list=state.heroTitles.length?state.heroTitles:state.titles;if(!list.length)return;const t=list[((state.slide%list.length)+list.length)%list.length];const art=h.querySelector('.hero-art'),copy=h.querySelector('.hero-copy');if(!copy)return;if(art){const next=img(t.banner_url||t.cover_url);if(art.getAttribute('src')!==next){art.setAttribute('src',next);art.alt='';}}const eyebrow=copy.querySelector('.eyebrow'),heading=copy.querySelector('h1'),pills=copy.querySelector('.pills'),actions=copy.querySelector('.hero-actions'),dots=copy.querySelector('.dots');if(eyebrow)eyebrow.textContent=t.is_featured?'✦ Featured story':'✦ Discover something new';if(heading)heading.textContent=titleName(t);if(pills)pills.innerHTML='<span class="pill">'+esc(media(t))+'</span><span class="pill">★ '+esc(Number(t.rating||0).toFixed(1))+'</span><span class="pill">'+esc(t.status||'Ongoing')+'</span>';if(actions){const open=actions.querySelector('[data-open]'),save=actions.querySelector('[data-save]');if(open)open.dataset.open=t.id;if(save){save.dataset.save=t.id;save.textContent=state.library.has(t.id)?'♥ In library':'♡ Add to library';}}if(dots)dots.querySelectorAll('[data-slide]').forEach((b,i)=>{b.classList.toggle('active',i===state.slide%Math.min(6,list.length));b.setAttribute('aria-current',i===state.slide%Math.min(6,list.length)?'true':'false')});}
 function home(){
- const titles=state.filtered,recs=recommendedTitles(),personalized=state.library.size>0;
+ const titles=state.filtered,recs=recommendedTitles(),personalized=state.library.size>0||state.progress.size>0||state.recentViewed.length>0;
  const used=new Set();
  const unique=(items,limit)=>items.filter(t=>t&&!used.has(String(t.id))&&used.add(String(t.id))).slice(0,limit);
  const section=(heading,items,limit,sub='')=>{const rows=unique(items,limit);return rows.length?'<section class="section">'+topTitle(heading,sub)+grid(rows)+'</section>':''};
