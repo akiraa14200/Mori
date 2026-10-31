@@ -71,8 +71,8 @@ begin
     if jsonb_typeof(video_value) <> 'array' then continue; end if;
     for video_url in select jsonb_array_elements_text(video_value) loop
       platform_value := case
-        when video_url ~* '(instagram\\.com|instagr\\.am)' then 'instagram'
-        when video_url ~* '(dailymotion\\.com|dai\\.ly)' then 'dailymotion'
+        when video_url ~* '(instagram\.com|instagr\.am)' then 'instagram'
+        when video_url ~* '(dailymotion\.com|dai\.ly)' then 'dailymotion'
         else 'youtube'
       end;
       insert into public.related_videos (title_id, video_url, platform, action_type, action_url)
