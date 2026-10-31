@@ -1,0 +1,29 @@
+name: Preview syntax check
+on:
+  push:
+    branches: [feature/videos-feed]
+  pull_request:
+    branches: [main]
+jobs:
+  inline-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check inline JavaScript in index.html
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]
+            .map(m => m[1]).filter(s => s.trim());
+          if (!scripts.length) throw new Error('No inline scripts found');
+          scripts.forEach((script, i) => {
+            try { new vm.Script(script, { filename: 'index.html:inline-script-' + (i + 1) }); }
+            catch (error) { console.error(error); process.exitCode = 1; }
+          });
+          console.log('Checked ' + scripts.length + ' inline scripts.');
+          NODE
