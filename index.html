@@ -344,7 +344,47 @@ function card(t){const status=titleStatus(t);return '<article class="card" data-
 function grid(list){return list.length?'<div class="grid">'+list.map(card).join('')+'</div>':'<div class="empty">No titles found yet. Try another search or check back soon.</div>'}
 function topTitle(text,sub=''){return '<div class="section-head"><div><h2>'+esc(text)+'</h2>'+(sub?'<p class="muted small">'+esc(sub)+'</p>':'')+'</div></div>'}
 let titlesLoadPromise=null;let titlesLoadedAt=0;const TITLES_CACHE_TTL=60*1000;
-async function loadTitles({force=false}={}){if(!force&&titlesLoadPromise)return titlesLoadPromise;if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;titlesLoadPromise=(async()=>{let data=null,error=null;const collected=[];for(let from=0;from<100000;from+=500){const result=await db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499);if(result.error){error=result.error;break}collected.push(...(result.data||[]));if(!result.data||result.data.length<500)break;if(from+500>=100000){error=new Error('Catalogue exceeded the safety pagination limit');break}}data=collected;if(error){console.error(error);notify('Could not load catalogue: '+error.message);return state.titles}state.titles=data||[];titlesLoadedAt=Date.now();state.titleIndex=state.titles.map(t=>({t,names:[titleName(t),...(t.alternative_names||[])].filter(Boolean).map(n=>RykoUtils.normalizeSearchText(n)),text:[t.name,...(t.alternative_names||[]),t.synopsis,...(t.genres||[]),...(t.themes||[]),t.author,t.artist,t.studio,t.country,t.season].filter(Boolean).join(' ').toLocaleLowerCase(),genreText:[...(t.genres||[]),...(t.themes||[])].join(' ').toLocaleLowerCase()}));state.recentTitles=state.titles.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));state.trendingTitles=state.titles.filter(t=>t.is_trending).slice().sort((a,b)=>Number(b.popularity||0)-Number(a.popularity||0));state.trendingSource='RykoCollection catalogue';state.heroTitles=state.titles.slice().sort((a,b)=>Number(!!b.is_featured)-Number(!!a.is_featured)||Number(!!b.is_trending)-Number(!!a.is_trending)||new Date(b.created_at)-new Date(a.created_at));applyFilters();loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable.',e));fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));return state.titles})().finally(()=>{titlesLoadPromise=null});return titlesLoadPromise}
+async function loadTitles({force=false}={}){
+ if(!force&&titlesLoadPromise)return titlesLoadPromise;
+ if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;
+ titlesLoadPromise=(async()=>{
+  const collected=[];
+  const publish=()=>{
+   state.titles=collected.slice();
+   state.titleIndex=state.titles.map(t=>({t,names:[titleName(t),...(Array.isArray(t.alternative_names)?t.alternative_names:[])].filter(Boolean).map(n=>RykoUtils.normalizeSearchText(n)),text:[t.name,...(Array.isArray(t.alternative_names)?t.alternative_names:[]),t.synopsis,...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[]),t.author,t.artist,t.studio,t.country,t.season].filter(Boolean).join(' ').toLocaleLowerCase(),genreText:[...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[])].join(' ').toLocaleLowerCase()}));
+   state.recentTitles=state.titles.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+   state.trendingTitles=state.titles.filter(t=>t.is_trending).slice().sort((a,b)=>Number(b.popularity||0)-Number(a.popularity||0));
+   state.trendingSource='RykoCollection catalogue';
+   state.heroTitles=state.titles.slice().sort((a,b)=>Number(!!b.is_featured)-Number(!!a.is_featured)||Number(!!b.is_trending)-Number(!!a.is_trending)||new Date(b.created_at||0)-new Date(a.created_at||0));
+   applyFilters();
+  };
+  try{
+   for(let from=0;from<100000;from+=500){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),7000);
+    let result;
+    try{result=await db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499).abortSignal(controller.signal)}
+    finally{clearTimeout(timer)}
+    if(result.error)throw result.error;
+    const rows=result.data||[];
+    collected.push(...rows);
+    publish();
+    if(rows.length<500)break;
+    if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
+   }
+   titlesLoadedAt=Date.now();
+  }catch(error){
+   console.error('Catalogue page load failed; keeping entries already loaded:',error);
+   titlesLoadedAt=0;
+   notify(collected.length?'Some catalogue entries could not load. Showing the entries already available.':'Could not load catalogue: '+(error.message||'Please check your connection and retry.'));
+  }
+  loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable.',e));
+  fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
+  if(startupComplete&&collected.length)render(true);
+  return state.titles;
+  })().finally(()=>{titlesLoadPromise=null});
+ return titlesLoadPromise;
+}
 async function fetchAniListTrending(){
  const cacheKey='rykocollection_anilist_trending_v1',cacheTtl=6*60*60*1000;
  let payload=null;
