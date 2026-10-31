@@ -289,7 +289,7 @@ input,select,textarea{min-width:0;max-width:100%}
 <script src="./config.js"></script><script src="./character-text.js"></script>
 <script src="./js/utils.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-(()=>{const app=document.getElementById('app');if(!app)return;const showFallback=()=>{if(app.firstElementChild?.classList.contains('loading'))app.innerHTML='<section class="section"><div class="empty"><h2>RykoCollection could not start.</h2><p>The application script did not finish starting. Check your connection and retry.</p><button class="btn primary" type="button" onclick="location.reload()">Retry</button></div></section>'};setTimeout(showFallback,12000);window.addEventListener('error',event=>{if(event instanceof ErrorEvent&&event.message)showFallback()})})();
+(()=>{const app=document.getElementById('app');if(!app)return;let recovered=false;const showFallback=()=>{if(recovered)return;if(app.querySelector('.loading,.ryko-loader')){recovered=true;app.innerHTML='<section class="section"><div class="empty"><h2>RykoCollection could not start.</h2><p>The app is taking too long to start. Check your connection and Supabase availability, then retry.</p><button class="btn primary" type="button" onclick="location.reload()">Retry</button></div></section>'}};setTimeout(showFallback,25000);window.addEventListener('error',event=>{if(event instanceof ErrorEvent&&event.message)showFallback()});window.addEventListener('unhandledrejection',()=>showFallback())})();
 </script>
 <script>
 (()=>{'use strict';
