@@ -394,6 +394,35 @@ input,select,textarea{min-width:0;max-width:100%}
  .comment-reply-wrap{margin-left:6px;padding-left:7px}
 }
 
+
+
+/* Mobile library: preserve cover, title and progress actions at narrow widths. */
+.library-page{min-width:0}
+.library-status-filters{display:flex;flex-wrap:nowrap;gap:7px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 1px 9px;scrollbar-width:thin}
+.library-status-filters .chip{flex:0 0 auto;white-space:nowrap}
+.library-row{min-width:0;align-items:flex-start}
+.library-row .grow{min-width:0;overflow-wrap:anywhere}
+.library-row .grow>strong{display:block;line-height:1.4;overflow-wrap:anywhere}
+.library-row .muted.small{line-height:1.5;overflow-wrap:anywhere}
+.library-row>button{flex:none}
+@media(max-width:600px){
+ .library-row{display:grid;grid-template-columns:54px minmax(0,1fr);gap:10px;padding:11px}
+ .library-row>img{width:54px;height:72px}
+ .library-row .grow{grid-column:2;grid-row:1}
+ .library-row>button{grid-column:2;justify-self:start;min-height:36px}
+ .library-row-actions{gap:6px}
+ .library-row-actions .chip{padding:8px 10px;font-size:11px}
+ .reading-stats-note{line-height:1.5}
+}
+@media(max-width:360px){
+ .reading-stats-grid{gap:8px}
+ .reading-stat-card{padding:12px}
+ .reading-stat-card .reading-stat-icon{font-size:10px}
+ .library-row{grid-template-columns:46px minmax(0,1fr);gap:9px;padding:9px}
+ .library-row>img{width:46px;height:64px}
+ .library-row-actions{display:grid;grid-template-columns:1fr}
+ .library-row-actions .chip{width:100%;text-align:center}
+}
 </style>
 </head>
 <body>
