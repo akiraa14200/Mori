@@ -243,19 +243,31 @@ function applyFilters(){const q=state.search.toLocaleLowerCase().trim();const so
 async function refreshNotificationBadge(){const badge=document.getElementById('notification-badge');if(!badge)return;if(!state.user){badge.classList.add('hidden');return}const {count,error}=await db.from('reader_notifications').select('id',{count:'exact',head:true}).eq('user_id',state.user.id).is('read_at',null);if(error){console.warn('Notification count unavailable',error.message);return}badge.textContent=String(Math.min(count||0,99));badge.classList.toggle('hidden',!(count>0))}
 async function toggleNotifications(){if(!state.user){location.hash='#/account';return notify('Sign in to view notifications.')}const old=document.getElementById('notification-popover');if(old){old.remove();return}const {data,error}=await db.from('reader_notifications').select('id,title,body,target_url,read_at,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(30);const rows=data||[],panel=document.createElement('aside');panel.id='notification-popover';panel.className='notification-popover';panel.innerHTML='<div class="section-head"><div><h2 style="font-size:18px;margin:0">Notifications</h2><p class="muted small">Release alerts and reading updates</p></div><button class="chip" id="notification-close">Close</button></div>'+(error?'<p class="muted small">Could not load notifications.</p>':rows.length?rows.map(n=>'<a class="notification-row '+(!n.read_at?'unread':'')+'" href="'+esc(n.target_url||'#/library')+'" data-notification-id="'+esc(n.id)+'"><div><strong>'+esc(n.title)+'</strong><p>'+esc(n.body||'')+'</p><span class="muted small">'+esc(fmtDate(n.created_at))+'</span></div></a>').join(''):'<p class="muted small">You’re all caught up.</p>');document.body.appendChild(panel);panel.querySelector('#notification-close').onclick=()=>panel.remove();panel.querySelectorAll('[data-notification-id]').forEach(a=>a.onclick=async e=>{await db.from('reader_notifications').update({read_at:new Date().toISOString()}).eq('id',a.dataset.notificationId).eq('user_id',state.user.id);if(a.getAttribute('href').startsWith('#/')){e.preventDefault();location.hash=a.getAttribute('href').slice(1);panel.remove()}refreshNotificationBadge()})}
 async function checkLibraryReleaseAlerts(){if(!state.user)return;for(const t of state.titles.filter(t=>state.library.has(t.id)&&t.anilist_id).slice(0,20)){try{const query='query ($id:Int){Media(id:$id,type:ANIME){title{english romaji} nextAiringEpisode{airingAt episode timeUntilAiring}}}';const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id:Number(t.anilist_id)}}),signal:AbortSignal.timeout(9000)});if(!res.ok)continue;const m=(await res.json()).data?.Media,ep=m?.nextAiringEpisode;if(!ep||ep.timeUntilAiring>259200)continue;await db.from('reader_notifications').upsert({user_id:state.user.id,title_id:t.id,kind:'release',title:'New episode coming soon',body:(m.title?.english||m.title?.romaji||t.name)+' · Episode '+ep.episode+' · '+(ep.timeUntilAiring<3600?'in less than an hour':'in '+Math.ceil(ep.timeUntilAiring/3600)+' hours'),target_url:'#/title/'+t.id,scheduled_at:new Date(ep.airingAt*1000).toISOString(),dedupe_key:'anime:'+t.id+':'+ep.episode+':'+ep.airingAt},{onConflict:'user_id,dedupe_key',ignoreDuplicates:true})}catch(e){console.warn('Release alert check skipped',e)}}refreshNotificationBadge()}
+const aniListMediaCache=new Map();
+const aniListMediaRequests=new Map();
+const ANILIST_MEDIA_TTL=15*60*1000;
 async function aniListMediaForTitle(t){
  const rawType=String(t.media_type||t.type||'').toLowerCase();
  const type=/anime|animation/.test(rawType)?'ANIME':'MANGA';
  const id=Number(t.anilist_id);
- const fields='id idMal type format status title{english romaji native} synonyms description(asHtml:false) startDate{year month day} endDate{year month day} season seasonYear episodes chapters volumes averageScore genres countryOfOrigin siteUrl coverImage{extraLarge large} bannerImage nextAiringEpisode{airingAt episode timeUntilAiring} staff(perPage:15,sort:RELEVANCE){edges{role node{name{full}}}} studios(isMain:true){nodes{name}}';
- const query=id?'query ($id:Int){Media(id:$id){'+fields+'}}':'query ($search:String,$type:MediaType){Page(perPage:1){media(search:$search,type:$type,sort:SEARCH_MATCH){'+fields+'}}}';
- const variables=id?{id}:{search:titleName(t),type};
- const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables}),signal:AbortSignal.timeout(10000)});
- const json=await res.json();
- if(!res.ok||json.errors?.length)throw Error(json.errors?.[0]?.message||'Metadata provider is unavailable');
- const m=id?json.data?.Media:json.data?.Page?.media?.[0];
- if(!m)throw Error('No matching AniList record found');
- return m;
+ const key=id?'id:'+id:'search:'+type+':'+String(titleName(t)).toLocaleLowerCase();
+ const cached=aniListMediaCache.get(key);
+ if(cached&&Date.now()-cached.savedAt<ANILIST_MEDIA_TTL)return cached.data;
+ if(aniListMediaRequests.has(key))return aniListMediaRequests.get(key);
+ const task=(async()=>{
+  const fields='id idMal type format status title{english romaji native} synonyms description(asHtml:false) startDate{year month day} endDate{year month day} season seasonYear episodes chapters volumes averageScore genres countryOfOrigin siteUrl coverImage{extraLarge large} bannerImage nextAiringEpisode{airingAt episode timeUntilAiring} staff(perPage:15,sort:RELEVANCE){edges{role node{name{full}}}} studios(isMain:true){nodes{name}}';
+  const query=id?'query ($id:Int){Media(id:$id){'+fields+'}}':'query ($search:String,$type:MediaType){Page(perPage:1){media(search:$search,type:$type,sort:SEARCH_MATCH){'+fields+'}}}';
+  const variables=id?{id}:{search:titleName(t),type};
+  const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables}),signal:AbortSignal.timeout(10000)});
+  const json=await res.json();
+  if(!res.ok||json.errors?.length)throw Error(json.errors?.[0]?.message||'Metadata provider is unavailable');
+  const m=id?json.data?.Media:json.data?.Page?.media?.[0];
+  if(!m)throw Error('No matching AniList record found');
+  aniListMediaCache.set(key,{savedAt:Date.now(),data:m});
+  return m;
+ })();
+ aniListMediaRequests.set(key,task);
+ try{return await task}finally{aniListMediaRequests.delete(key)}
 }
 function mergeAniListMetadata(t,m){
  if(!t.anilist_id)t.anilist_id=m.id;
