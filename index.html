@@ -776,10 +776,12 @@ textarea{overflow:auto}
 }
 
 /* Restore the original homepage carousel visuals and reduce expensive paint work. */
-/* Keep carousel pagination as compact horizontal lines. */
-.hero .dots{display:flex;align-items:center;gap:6px;margin-top:5px}
-.hero .dot{display:block;width:18px;height:3px;min-width:18px;border-radius:9px;padding:0;flex:0 0 18px}
-.hero .dot.active{width:28px;height:3px;min-width:28px;flex-basis:28px}
+/* Tiny horizontal carousel progress marks — override button and mobile styles. */
+.hero .dots{display:flex!important;flex-direction:row!important;align-items:center!important;gap:4px!important;margin-top:5px!important;width:auto!important;height:4px!important}
+.hero .dots .dot,
+.hero .dots button.dot{appearance:none!important;-webkit-appearance:none!important;display:block!important;box-sizing:border-box!important;width:10px!important;min-width:10px!important;max-width:10px!important;height:2px!important;min-height:2px!important;max-height:2px!important;flex:0 0 10px!important;padding:0!important;margin:0!important;border:0!important;border-radius:2px!important;background:#ffffff65!important;transform:none!important}
+.hero .dots .dot.active,
+.hero .dots button.dot.active{width:14px!important;min-width:14px!important;max-width:14px!important;height:2px!important;min-height:2px!important;max-height:2px!important;flex-basis:14px!important;background:var(--accent)!important}
 
 .single-video-placeholder{background-image:radial-gradient(ellipse at center,#34343d 0%,#111116 70%)}
 .single-video-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
