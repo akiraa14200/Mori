@@ -764,7 +764,31 @@ searchSuggestions.addEventListener('mousedown',e=>{if(e.target.closest('button')
 searchSuggestions.addEventListener('click',e=>{const item=e.target.closest('[data-search-open]');if(item){hideSearchSuggestions();searchInput.blur();openTitle(item.dataset.searchOpen);return}if(e.target.closest('[data-search-all]')){hideSearchSuggestions();location.hash='#/browse';render()}});
 document.addEventListener('click',e=>{if(!e.target.closest('.global-search-wrap'))hideSearchSuggestions()});
 document.getElementById('account-btn').onclick=()=>{location.hash='#/account'};document.getElementById('notifications-btn').onclick=toggleNotifications;document.getElementById('mobile-account').onclick=()=>{location.hash='#/account'};document.querySelectorAll('[data-route]').forEach(b=>b.onclick=()=>location.hash=b.dataset.route);document.querySelectorAll('[data-nav-route]').forEach(b=>b.classList.toggle('active',b.dataset.navRoute===(location.hash.replace(/^#/, '')||'/')));document.getElementById('year').textContent=new Date().getFullYear();
-async function routeChanged(){const route=location.hash.replace(/^#/, '')||'/';if(route.startsWith('/title/')){const id=route.slice(7);if(state.titles.some(t=>t.id===id)){state.selected=state.titles.find(t=>t.id===id);state.characters=[];state.comments=[];state.commentLikes={};render();loadEntryExtras(id).then(()=>{if(state.selected?.id!==id||state.route!==route)return;const t=state.selected,temp=document.createElement('div');temp.innerHTML=entry(t);const a=document.querySelector('#tab-characters'),b=temp.querySelector('#tab-characters');if(a&&b)a.innerHTML=b.innerHTML;const c=document.querySelector('#entry-posts'),d=temp.querySelector('#entry-posts');if(c&&d)c.innerHTML=d.innerHTML;const tab=document.querySelector('[data-tab="community"]');if(tab)tab.textContent='Comments ('+state.comments.length+')';bindCommentControls()}).catch(e=>console.warn('Could not load title details:',e));loadEntryReleaseInfo(state.selected)}}else render();if(state.user)checkLibraryReleaseAlerts();refreshNotificationBadge()}window.addEventListener('hashchange',routeChanged);window.addEventListener('popstate',routeChanged);
+async function routeChanged(){
+ const route=location.hash.replace(/^#/, '')||'/';
+ if(route.startsWith('/title/')){
+  const id=route.slice(7);
+  const selected=state.titles.find(t=>String(t.id)===String(id));
+  if(selected){
+   state.selected=selected;state.characters=[];state.comments=[];state.commentLikes={};render();
+   loadEntryExtras(id).then(()=>{
+    if(state.selected?.id!==selected.id||state.route!==route)return;
+    // Patch only the sections whose async data changed. Avoid rebuilding the full entry in a temporary DOM tree.
+    const characters=document.querySelector('#tab-characters');
+    if(characters)characters.innerHTML=charactersMarkup(state.characters||[]);
+    const posts=document.querySelector('#entry-posts');
+    if(posts)posts.innerHTML=commentsMarkup(state.comments||[]);
+    const tab=document.querySelector('[data-tab="community"]');
+    if(tab)tab.textContent='Comments ('+state.comments.length+')';
+    bindCommentControls();
+   }).catch(e=>console.warn('Could not load title details:',e));
+   loadEntryReleaseInfo(selected);
+  }
+ }else render();
+ if(state.user)checkLibraryReleaseAlerts();
+ refreshNotificationBadge();
+}
+window.addEventListener('hashchange',routeChanged);window.addEventListener('popstate',routeChanged);
 db.auth.onAuthStateChange((event,session)=>{if(event==='INITIAL_SESSION'||!startupComplete)return;setTimeout(async()=>{try{await refreshUser();if(state.user)await ensureProfile();if(state.route.startsWith('/title/')&&state.selected)await loadEntryExtras(state.selected.id);render();if(state.route.startsWith('/title/')&&state.selected)loadEntryReleaseInfo(state.selected);if(state.user)checkLibraryReleaseAlerts();refreshNotificationBadge()}catch(error){console.error('Auth refresh failed',error);notify('Account refresh failed: '+(error?.message||'unknown error'))}},0)});
 function withTimeout(promise,label,ms=9000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out after '+ms+'ms')),ms))])}
 let startupComplete=false;
