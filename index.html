@@ -344,6 +344,20 @@ function card(t){const status=titleStatus(t);return '<article class="card" data-
 function grid(list){return list.length?'<div class="grid">'+list.map(card).join('')+'</div>':'<div class="empty">No titles found yet. Try another search or check back soon.</div>'}
 function topTitle(text,sub=''){return '<div class="section-head"><div><h2>'+esc(text)+'</h2>'+(sub?'<p class="muted small">'+esc(sub)+'</p>':'')+'</div></div>'}
 let titlesLoadPromise=null;let titlesLoadedAt=0;const TITLES_CACHE_TTL=60*1000;
+async function fetchTitlesRestPage(from){
+ const url=new URL(cfg.supabaseUrl.replace(/\/$/,'')+'/rest/v1/titles');
+ url.searchParams.set('select','*');
+ url.searchParams.set('order','created_at.desc,id.asc');
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+ try{
+  const response=await fetch(url.toString(),{method:'GET',headers:{apikey:cfg.supabaseKey,Authorization:'Bearer '+cfg.supabaseKey,Range:from+'-'+(from+499),'Range-Unit':'items'},signal:controller.signal,cache:'no-store'});
+  const body=await response.text();
+  if(!response.ok)throw new Error('Supabase REST HTTP '+response.status+': '+body.slice(0,350));
+  let rows;try{rows=JSON.parse(body)}catch{throw new Error('Supabase REST returned invalid JSON: '+body.slice(0,180))}
+  if(!Array.isArray(rows))throw new Error('Supabase REST returned an unexpected catalogue response');
+  return rows;
+ }finally{clearTimeout(timer)}
+}
 async function loadTitles({force=false}={}){
  if(!force&&titlesLoadPromise)return titlesLoadPromise;
  if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;
@@ -360,29 +374,35 @@ async function loadTitles({force=false}={}){
   };
   try{
    for(let from=0;from<100000;from+=500){
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),7000);
-    let result;
-    try{result=await db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499).abortSignal(controller.signal)}
-    finally{clearTimeout(timer)}
-    if(result.error)throw result.error;
-    const rows=result.data||[];
+    let rows=[],clientError=null;
+    try{
+     const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',12000);
+     if(result.error)throw result.error;
+     rows=result.data||[];
+    }catch(error){clientError=error;console.warn('Supabase client catalogue request failed; trying REST fallback:',error)}
+    if(clientError||!rows.length&&from===0){
+     try{rows=await fetchTitlesRestPage(from);if(clientError)console.info('Catalogue recovered through direct Supabase REST fallback.')}
+     catch(restError){throw new Error('Database client: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
+    }
     collected.push(...rows);
     publish();
+    if(startupComplete&&rows.length)render(true);
     if(rows.length<500)break;
     if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
    }
    titlesLoadedAt=Date.now();
+   if(!collected.length)notify('The database responded, but no public catalogue entries were returned.');
   }catch(error){
-   console.error('Catalogue page load failed; keeping entries already loaded:',error);
+   console.error('Catalogue loading failed:',error);
    titlesLoadedAt=0;
-   notify(collected.length?'Some catalogue entries could not load. Showing the entries already available.':'Could not load catalogue: '+(error.message||'Please check your connection and retry.'));
+   const detail=[error.message,error.code,error.details,error.hint].filter(Boolean).join(' · ');
+   notify(collected.length?'Some catalogue entries could not load. Showing the entries already available.':'Catalogue loading failed: '+detail.slice(0,220));
   }
-  loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable.',e));
-  fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
-  if(startupComplete&&collected.length)render(true);
+  loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable:',e));
+  if(state.titles.length)fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
+  if(startupComplete)render(true);
   return state.titles;
-  })().finally(()=>{titlesLoadPromise=null});
+ })().finally(()=>{titlesLoadPromise=null});
  return titlesLoadPromise;
 }
 async function fetchAniListTrending(){
