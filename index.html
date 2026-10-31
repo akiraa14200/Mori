@@ -343,7 +343,16 @@ function statusClass(t){const s=titleStatus(t).toLowerCase();return s==='airing'
 function card(t){const status=titleStatus(t);return '<article class="card" data-open="'+esc(t.id)+'" tabindex="0" role="button" aria-label="Open '+esc(titleName(t))+' · '+esc(status)+'"><div class="cover"><img loading="lazy" src="'+esc(img(t.cover_url))+'" alt="'+esc(titleName(t))+'" onerror="this.style.opacity=.15"><span class="badge">'+esc(media(t))+'</span><span class="status-badge status-'+statusClass(t)+'">'+esc(status)+'</span><span class="rating">★ '+esc(Number(t.rating||0).toFixed(1))+'</span></div><h3>'+esc(titleName(t))+'</h3><div class="meta">'+esc(t.release_year||'—')+'</div>'+(state.admin?'<div class="card-admin-actions"><button class="btn" type="button" data-quick-edit="'+esc(t.id)+'">✎ Edit entry</button></div>':'')+'</article>'}
 function grid(list){return list.length?'<div class="grid">'+list.map(card).join('')+'</div>':'<div class="empty">No titles found yet. Try another search or check back soon.</div>'}
 function topTitle(text,sub=''){return '<div class="section-head"><div><h2>'+esc(text)+'</h2>'+(sub?'<p class="muted small">'+esc(sub)+'</p>':'')+'</div></div>'}
-let titlesLoadPromise=null;let titlesLoadedAt=0;const TITLES_CACHE_TTL=60*1000;
+let titlesLoadPromise=null;let titlesLoadedAt=0;const TITLES_CACHE_TTL=60*1000;const TITLES_STORAGE_CACHE_KEY='ryko-title-cache-v1';const TITLES_STORAGE_CACHE_TTL=24*60*60*1000;
+function setCatalogue(rows){
+ state.titles=rows.slice();
+ state.titleIndex=state.titles.map(t=>({t,names:[titleName(t),...(Array.isArray(t.alternative_names)?t.alternative_names:[])].filter(Boolean).map(n=>RykoUtils.normalizeSearchText(n)),text:[t.name,...(Array.isArray(t.alternative_names)?t.alternative_names:[]),t.synopsis,...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[]),t.author,t.artist,t.studio,t.country,t.season].filter(Boolean).join(' ').toLocaleLowerCase(),genreText:[...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[])].join(' ').toLocaleLowerCase()}));
+ state.recentTitles=state.titles.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+ state.trendingTitles=state.titles.filter(t=>t.is_trending).slice().sort((a,b)=>Number(b.popularity||0)-Number(a.popularity||0));
+ state.trendingSource='RykoCollection catalogue';
+ state.heroTitles=state.titles.slice().sort((a,b)=>Number(!!b.is_featured)-Number(!!a.is_featured)||Number(!!b.is_trending)-Number(!!a.is_trending)||new Date(b.created_at||0)-new Date(a.created_at||0));
+ applyFilters();
+}
 async function fetchTitlesRestPage(from){
  const url=new URL(cfg.supabaseUrl.replace(/\/$/,'')+'/rest/v1/titles');
  url.searchParams.set('select','*');
@@ -363,15 +372,14 @@ async function loadTitles({force=false}={}){
  if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;
  titlesLoadPromise=(async()=>{
   const collected=[];
-  const publish=()=>{
-   state.titles=collected.slice();
-   state.titleIndex=state.titles.map(t=>({t,names:[titleName(t),...(Array.isArray(t.alternative_names)?t.alternative_names:[])].filter(Boolean).map(n=>RykoUtils.normalizeSearchText(n)),text:[t.name,...(Array.isArray(t.alternative_names)?t.alternative_names:[]),t.synopsis,...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[]),t.author,t.artist,t.studio,t.country,t.season].filter(Boolean).join(' ').toLocaleLowerCase(),genreText:[...(Array.isArray(t.genres)?t.genres:[]),...(Array.isArray(t.themes)?t.themes:[])].join(' ').toLocaleLowerCase()}));
-   state.recentTitles=state.titles.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-   state.trendingTitles=state.titles.filter(t=>t.is_trending).slice().sort((a,b)=>Number(b.popularity||0)-Number(a.popularity||0));
-   state.trendingSource='RykoCollection catalogue';
-   state.heroTitles=state.titles.slice().sort((a,b)=>Number(!!b.is_featured)-Number(!!a.is_featured)||Number(!!b.is_trending)-Number(!!a.is_trending)||new Date(b.created_at||0)-new Date(a.created_at||0));
-   applyFilters();
-  };
+  // Render a recent saved catalogue immediately, then refresh it from Supabase.
+  if(!force&&!state.titles.length){
+   try{
+    const cached=JSON.parse(localStorage.getItem(TITLES_STORAGE_CACHE_KEY)||'null');
+    if(Array.isArray(cached?.titles)&&cached.titles.length&&Date.now()-Number(cached.savedAt||0)<TITLES_STORAGE_CACHE_TTL)setCatalogue(cached.titles);
+   }catch(error){console.warn('Saved catalogue cache unavailable:',error)}
+  }
+  const publish=()=>setCatalogue(collected);
   try{
    for(let from=0;from<100000;from+=500){
     let rows=[],clientError=null;
@@ -391,12 +399,14 @@ async function loadTitles({force=false}={}){
     if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
    }
    titlesLoadedAt=Date.now();
+   if(collected.length){try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:collected}))}catch(error){console.warn('Could not save catalogue cache:',error)}}
    if(!collected.length)notify('The database responded, but no public catalogue entries were returned.');
   }catch(error){
    console.error('Catalogue loading failed:',error);
    titlesLoadedAt=0;
    const detail=[error.message,error.code,error.details,error.hint].filter(Boolean).join(' · ');
-   notify(collected.length?'Some catalogue entries could not load. Showing the entries already available.':'Catalogue loading failed: '+detail.slice(0,220));
+   if(state.titles.length)notify('Could not refresh the catalogue. Showing the most recently saved entries.');
+   else notify('Catalogue loading failed: '+detail.slice(0,220));
   }
   loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable:',e));
   if(state.titles.length)fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
@@ -1157,8 +1167,10 @@ async function startup(){
   })();
   const catalogueTask=(async()=>{try{
     await withTimeout(loadTitles(),'Catalogue request',15000);
-  }catch(error){console.error('Startup catalogue request failed:',error);notify('Catalogue is taking too long to respond. Please refresh in a moment.')}
+  }catch(error){console.error('Startup catalogue request failed:',error);notify(state.titles.length?'Showing saved catalogue entries while the database reconnects.':'Catalogue is taking too long to respond. Please refresh in a moment.')}
   })();
+  // If a recent catalogue is cached locally, show it while the network refresh runs.
+  if(state.titles.length)render();
   await Promise.allSettled([authTask,catalogueTask]);
   const initialRoute=location.hash.replace(/^#/, '')||'/';
   if(initialRoute.startsWith('/title/')){
