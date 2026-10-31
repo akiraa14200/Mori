@@ -308,6 +308,31 @@ input,select,textarea{min-width:0;max-width:100%}
  .entry-tab-panel.panel{padding:15px 12px}
 }
 
+
+/* Mobile video cards: keep metadata and actions readable without horizontal squeeze. */
+@media(max-width:600px){
+ .video-feed-card{margin:14px 0;border-radius:19px}
+ .video-feed-info{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:13px}
+ .video-feed-copy{width:100%;min-width:0}
+ .video-feed-copy>strong{font-size:14px;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
+ .video-feed-creator{min-width:0;font-size:12px}
+ .video-feed-creator span{min-width:0;overflow-wrap:anywhere}
+ .video-feed-info .muted.small{line-height:1.45}
+ .video-feed-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%}
+ .video-feed-actions>*{width:100%;min-width:0;min-height:40px;padding:9px 8px;font-size:11px;white-space:normal;text-align:center;justify-content:center}
+ .video-feed-actions .video-feed-action{grid-column:1/-1}
+ .related-video-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:10px}
+ .related-video-card-meta{padding:10px}
+ .related-video-card-meta strong{white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+ .entry-related-heading{align-items:flex-start;flex-direction:column;gap:9px}
+}
+@media(max-width:360px){
+ .video-feed-actions{grid-template-columns:1fr}
+ .video-feed-actions .video-feed-action{grid-column:auto}
+ .video-feed-actions>*{min-height:42px}
+ .related-video-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
