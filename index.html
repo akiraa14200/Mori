@@ -343,7 +343,40 @@ async function getRelatedVideoMap(){const {data,error}=await db.from('site_setti
 async function saveRelatedVideosForTitle(id,urls){const current=await getRelatedVideoMap();if(urls.length)current[String(id)]=urls;else delete current[String(id)];const existing=await db.from('site_settings').select('key').eq('key','related_videos_by_title').maybeSingle();if(existing.error)throw existing.error;const result=existing.data?await db.from('site_settings').update({value:current}).eq('key','related_videos_by_title'):await db.from('site_settings').insert({key:'related_videos_by_title',value:current});if(result.error)throw result.error}
 async function loadEntryRelatedVideos(t){const box=document.getElementById('entry-related-videos');if(!box)return;box.innerHTML='';try{const map=await getRelatedVideoMap();if(state.selected?.id!==t.id)return;const urls=(map[String(t.id)]||[]).filter(url=>typeof url==='string');const videos=urls.map((url,i)=>({url,embed:trailerEmbedUrl(url),index:i})).filter(v=>v.embed);if(!videos.length)return;box.innerHTML='<section style="margin-top:24px"><h2>Related Videos</h2><div class="related-video-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px">'+videos.map(v=>'<article class="panel" style="padding:10px;min-width:0"><div style="position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:#08080b"><iframe src="'+esc(v.embed)+'" title="'+esc(titleName(t))+' related video '+(v.index+1)+'" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div></article>').join('')+'</div></section>'}catch(error){console.warn('Related videos unavailable:',error.message)}}
 async function loadEntryTrailer(t){const box=document.getElementById('entry-trailer');if(!box)return;box.innerHTML='';const showTrailer=url=>{const embed=trailerEmbedUrl(url);if(!embed)return false;const current=document.getElementById('entry-trailer');if(!current||state.selected?.id!==t.id)return false;current.innerHTML='<div style="margin-top:24px"><h3 style="font-size:17px;margin:0 0 12px">Trailer</h3><div style="position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:15px;border:1px solid var(--line);background:#08080b"><iframe src="'+esc(embed)+'" title="'+esc(titleName(t))+' trailer" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div></div>';return true};if(t?.trailer_url&&showTrailer(t.trailer_url))return;if(!t?.anilist_id)return;try{const query='query ($id:Int){Media(id:$id){trailer{id site}}}';const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id:Number(t.anilist_id)}})});if(!res.ok)return;const json=await res.json();const trailer=json.data?.Media?.trailer;if(!trailer?.id)return;const site=String(trailer.site||'').toLowerCase();const trailerUrl=site==='youtube'?'https://www.youtube.com/watch?v='+trailer.id:site==='dailymotion'?'https://www.dailymotion.com/video/'+trailer.id:'';if(trailerUrl)showTrailer(trailerUrl)}catch(error){console.warn('Trailer lookup failed',error)}}
-async function loadEntryExtras(id){let characterResult=null;const d1=window.APP_CONFIG?.cloudflareD1Url;if(!state.admin&&d1){try{const r=await fetch(d1+'/api/characters?title_id='+encodeURIComponent(id),{headers:{Accept:'application/json'}});if(r.ok){const payload=await r.json();if(Array.isArray(payload.data))characterResult={data:payload.data,error:null}}}catch(e){console.warn('Cloudflare D1 character cache unavailable; falling back to Supabase.',e)}}const [ch,co]=await Promise.all([characterResult?Promise.resolve(characterResult):db.from('characters').select('*').eq('title_id',id).order('created_at',{ascending:false}).limit(60),db.from('community_comments').select('id,user_id,body,media_url,media_type,created_at,parent_comment_id,spoiler,kind,rating').eq('title_id',id).order('created_at',{ascending:false}).limit(50)]);state.characters=(ch.data||[]).slice(0,60);state.reviews=[];state.comments=co.data||[];state.commentLikes={};const commentIds=state.comments.map(x=>x.id);if(commentIds.length){const {data:likes,error:likeError}=await db.from('community_comment_likes').select('comment_id,user_id').in('comment_id',commentIds);if(!likeError)(likes||[]).forEach(l=>{const row=state.commentLikes[l.comment_id]||(state.commentLikes[l.comment_id]={count:0,liked:false});row.count++;if(l.user_id===state.user?.id)row.liked=true})}const ids=[...new Set(state.comments.map(x=>x.user_id).filter(Boolean))];if(ids.length){const {data:ps,error:pe}=await db.from('profiles').select('id,username,display_name,avatar_url').in('id',ids);if(!pe)(ps||[]).forEach(p=>state.profiles[p.id]=p)}if(ch.error)console.warn(ch.error);if(co.error)console.warn(co.error)}
+const entryExtrasRequests=new Map();
+async function loadEntryExtras(id){
+ const key=String(id);
+ if(entryExtrasRequests.has(key))return entryExtrasRequests.get(key);
+ const task=(async()=>{
+  let characterResult=null;
+  const d1=window.APP_CONFIG?.cloudflareD1Url;
+  if(!state.admin&&d1){
+   try{
+    const r=await fetch(d1+'/api/characters?title_id='+encodeURIComponent(id),{headers:{Accept:'application/json'}});
+    if(r.ok){const payload=await r.json();if(Array.isArray(payload.data))characterResult={data:payload.data,error:null}}
+   }catch(e){console.warn('Cloudflare D1 character cache unavailable; falling back to Supabase.',e)}
+  }
+  const [ch,co]=await Promise.all([
+   characterResult?Promise.resolve(characterResult):db.from('characters').select('*').eq('title_id',id).order('created_at',{ascending:false}).limit(60),
+   db.from('community_comments').select('id,user_id,body,media_url,media_type,created_at,parent_comment_id,spoiler,kind,rating').eq('title_id',id).order('created_at',{ascending:false}).limit(50)
+  ]);
+  if(state.selected&&String(state.selected.id)!==key)return;
+  state.characters=(ch.data||[]).slice(0,60);
+  state.reviews=[];state.comments=co.data||[];state.commentLikes={};
+  const commentIds=state.comments.map(x=>x.id);
+  const ids=[...new Set(state.comments.map(x=>x.user_id).filter(Boolean))];
+  // These independent lookups run in parallel after the comment list is known.
+  const [likesResult,profilesResult]=await Promise.all([
+   commentIds.length?db.from('community_comment_likes').select('comment_id,user_id').in('comment_id',commentIds):Promise.resolve({data:[],error:null}),
+   ids.length?db.from('profiles').select('id,username,display_name,avatar_url').in('id',ids):Promise.resolve({data:[],error:null})
+  ]);
+  if(likesResult&&!likesResult.error)(likesResult.data||[]).forEach(l=>{const row=state.commentLikes[l.comment_id]||(state.commentLikes[l.comment_id]={count:0,liked:false});row.count++;if(l.user_id===state.user?.id)row.liked=true});
+  if(profilesResult&&!profilesResult.error)(profilesResult.data||[]).forEach(p=>state.profiles[p.id]=p);
+  if(ch.error)console.warn(ch.error);if(co.error)console.warn(co.error);
+ })();
+ entryExtrasRequests.set(key,task);
+ try{return await task}finally{entryExtrasRequests.delete(key)}
+}
 
 // Storage-saving helpers: compress still images before upload and remove replaced/orphaned files.
 const MAX_IMAGE_UPLOAD_BYTES=8*1024*1024;
