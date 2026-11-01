@@ -6,7 +6,7 @@ create table if not exists public.titles (
  id uuid primary key default gen_random_uuid(),
  name text not null,
  alternative_names text[] not null default '{}',
- media_type text not null check (media_type in ('Manga','Manhwa','Manhua','Anime','Light Novel','Web Novel')),
+ media_type text not null check (media_type in ('Manga','Manhwa','Manhua','Anime','Movie','TV Series','Light Novel','Web Novel')),
  synopsis text not null default '',
  cover_url text not null default '',
  banner_url text not null default '',
@@ -33,6 +33,7 @@ create table if not exists public.titles (
 );
 alter table public.titles add column if not exists anilist_id integer;
 alter table public.titles add column if not exists trailer_url text;
+alter table public.titles add column if not exists read_url text;
 alter table public.titles add column if not exists read_url text;
 
 create table if not exists public.characters (
