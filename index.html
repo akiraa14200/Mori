@@ -967,24 +967,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .comment-attach,.comment-send{width:42px;height:42px}
 .comment-send{background:var(--accent);color:#fff}
 .comment-send:hover{background:var(--accent-hover)}
-/* Videos: a true viewing feed, clear distinction between formats */
-.videos-page{max-width:1220px}
-.videos-page h1{font-size:clamp(30px,4vw,46px);letter-spacing:-.05em}
-.video-feed-section{margin:30px 0 42px}
-.video-feed-section-heading{margin-bottom:16px}
-.video-feed-section-heading h2{font-size:clamp(19px,2vw,24px)}
-.video-feed-card{border:1px solid var(--line);border-radius:14px;background:var(--surface-1);box-shadow:0 8px 25px rgba(0,0,0,.2);overflow:hidden}
-.video-feed-card:hover{border-color:rgba(240,68,82,.34);box-shadow:0 14px 34px rgba(0,0,0,.3)}
-.video-feed-frame{background:#07080c}
-.video-feed-info{padding:13px;align-items:flex-start}
-.video-feed-copy>strong{font-size:13px;line-height:1.42}
-.video-feed-creator{color:var(--muted);font-size:11px}
-.video-feed-actions{gap:7px}
-.video-feed-actions .btn,.video-feed-actions button{border-radius:9px}
-.video-feed-shorts-row{gap:12px;scroll-padding-inline:4px}
-.video-feed-short .video-feed-info{padding:10px}
-.related-video-card{border:1px solid var(--line);border-radius:12px;background:var(--surface-1);overflow:hidden}
-.related-video-card:hover{border-color:rgba(240,68,82,.32)}
 /* Library, account, profile and admin: operational clarity */
 .reading-tracker,.auth-layout,.profile-card,.profile-settings-panel,.profile-preview-card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.018));box-shadow:var(--shadow-soft)}
 .reading-tracker{padding:clamp(15px,2.5vw,22px)}
@@ -1080,16 +1062,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
  .facts{gap:8px}
  .fact{padding:9px}
  .fact strong{font-size:12px}
- .videos-page{max-width:none}
- .video-feed-section{margin:22px 0 30px}
- .video-feed-section-heading h2{font-size:19px}
- .video-feed-video-grid{grid-template-columns:1fr;gap:13px}
- .video-feed-regular .video-feed-card{display:grid;grid-template-columns:minmax(118px,40%) minmax(0,1fr);align-items:stretch}
- .video-feed-regular .video-feed-frame{height:100%;min-height:100%;aspect-ratio:16/10}
- .video-feed-regular .video-feed-info{display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:10px}
- .video-feed-regular .video-feed-actions{display:flex;flex-wrap:wrap;width:100%}
- .video-feed-regular .video-feed-actions>*{flex:1;min-width:0;min-height:36px;padding:7px 8px;font-size:10px;text-align:center;justify-content:center}
- .video-feed-shorts-row{grid-auto-columns:minmax(132px,40vw);gap:10px}
  .news-hero{padding:20px;border-radius:15px}
  .news-controls{align-items:flex-start;flex-direction:column}
  .news-grid{grid-template-columns:1fr 1fr}
@@ -1108,10 +1080,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
  .hero{aspect-ratio:1/1;min-height:245px}
  .hero-copy{max-width:100%;padding:16px}
  .hero h1{font-size:27px}
- .video-feed-regular .video-feed-card{grid-template-columns:minmax(104px,38%) minmax(0,1fr)}
- .video-feed-regular .video-feed-info{padding:8px}
- .video-feed-copy>strong{font-size:11px}
- .video-feed-regular .video-feed-actions>*{font-size:9px;padding:6px}
  .news-grid{grid-template-columns:1fr}
  .entry-intro{align-items:flex-start}
  .entry-cover{width:88px}
@@ -1119,12 +1087,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
  .entry-actions .btn{font-size:10px;padding:7px 8px}
 }
 @media(hover:none){
- .card:hover .cover img,.news-card:hover,.character:hover,.video-feed-card:hover{transform:none}
 }
 @media(prefers-reduced-motion:reduce){
  html{scroll-behavior:auto}
  *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
 }
+
 
 </style>
 </head>
