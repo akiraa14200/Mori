@@ -929,7 +929,7 @@ async function loadTitles({force=false}={}){
    titlesLoadedAt=0;
    const detail=[error.message,error.code,error.details,error.hint].filter(Boolean).join(' · ');
    if(state.titles.length)notify('Could not refresh the catalogue. Showing the most recently saved entries.');
-   else notify('Could not load entries. Please check your connection and retry.);
+   else notify('Could not load entries. Please check your connection and retry.');
   }
   loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable:',e));
   if(state.titles.length)fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
