@@ -1685,7 +1685,7 @@ async function removeAdminTitle(id){
   // Verify the canonical database no longer contains the entry before refreshing the UI.
   const {data:stillThere,error:verifyError}=await db.from('titles').select('id').eq('id',id).maybeSingle();
   if(verifyError)throw new Error('Deleted entry could not be verified: '+verifyError.message);
-  if(stillThere)throw new Error('The entry is still present after deletion. Check the account's delete permissions.');
+  if(stillThere)throw new Error('The entry is still present after deletion. Check the delete permissions.');
   // Remove it from the visible catalogue immediately instead of waiting for a full catalogue reload.
   const isTarget=t=>String(t?.id)===String(id);
   state.titles=state.titles.filter(t=>!isTarget(t));
