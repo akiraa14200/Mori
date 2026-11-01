@@ -1145,6 +1145,32 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @keyframes footerMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media(max-width:420px){.footer-social-links{grid-template-columns:none!important}.footer-social-links .footer-social-link{width:auto}}
 @media(prefers-reduced-motion:reduce){.footer-marquee-track{animation:none;transform:none}}
+
+/* Desktop header fit: keep the masthead in one balanced row without clipping. */
+@media (min-width:801px){
+ .topbar{width:100%;overflow:visible}
+ .topbar>.wrap.nav{width:100%;max-width:1440px;min-width:0;display:flex;align-items:center;gap:clamp(10px,1.35vw,22px);padding-inline:clamp(18px,3vw,40px)}
+ .topbar .brand{flex:0 0 auto;font-size:clamp(19px,1.65vw,24px);white-space:nowrap}
+ .topbar .navlinks{display:flex;flex:1 1 auto;min-width:0;justify-content:center;gap:clamp(0px,.35vw,5px);white-space:nowrap}
+ .topbar .navlinks a{flex:0 1 auto;min-width:0;gap:6px;padding-inline:clamp(5px,.75vw,11px);font-size:clamp(11px,.9vw,13px)}
+ .topbar .navright{display:flex;flex:0 1 auto;min-width:0;align-items:center;gap:8px}
+ .topbar .global-search-wrap{flex:0 1 220px;min-width:112px}
+ .topbar .search{display:block;width:100%;min-width:0}
+ .topbar .header-reader-tools{display:flex;flex:0 0 auto;align-items:center;gap:7px}
+}
+@media (min-width:801px) and (max-width:1100px){
+ .topbar .navlinks a .nav-icon{display:none}
+ .topbar .navlinks a{padding-inline:8px;font-size:12px}
+ .topbar .global-search-wrap{flex-basis:clamp(125px,17vw,180px);min-width:125px}
+ .topbar .brand{font-size:20px;letter-spacing:-.07em}
+ .topbar .navright{gap:6px}
+}
+@media (min-width:801px) and (max-width:880px){
+ .topbar>.wrap.nav{gap:8px;padding-inline:14px}
+ .topbar .navlinks a{padding-inline:6px;font-size:11px}
+ .topbar .global-search-wrap{flex-basis:118px;min-width:118px}
+}
+
 </style>
 </head>
 <body>
