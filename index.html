@@ -1094,6 +1094,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 
 
+/* Homepage scroll performance: defer off-screen shelves and reduce mobile paint work. */
+.home-page{min-width:0}
+.home-page>.home-lazy-section{content-visibility:auto;contain-intrinsic-size:auto 560px}
+.home-page>.section{contain:layout style}
+.home-page .card .badge,.home-page .card .status-badge,.home-page .card .rating{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.home-page .cover{box-shadow:none}
+.home-page .card:hover .cover{box-shadow:none}
+.home-page .cover img{transition:none}
+@media(max-width:800px){.home-page>.home-lazy-section{contain-intrinsic-size:auto 480px}.home-page .discovery-strip{backdrop-filter:none;-webkit-backdrop-filter:none}.home-page .card{content-visibility:auto;contain-intrinsic-size:auto 250px}}
+@media(prefers-reduced-motion:reduce){.home-page *{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -1159,7 +1169,7 @@ function media(t){return t?.media_type||t?.type||'Manga'}
 function isWatchEntry(t){return ['anime','movie','movies','film','tv','tv series','video','videos'].includes(String(media(t)).trim().toLowerCase())}
 function titleStatus(t){const raw=String(t?.status||'').trim();const key=raw.toLowerCase().replace(/[ _-]+/g,' ');const labels={'releasing':'Airing','airing':'Airing','publishing':'Ongoing','ongoing':'Ongoing','currently publishing':'Ongoing','finished':'Completed','complete':'Completed','completed':'Completed','not yet released':'Upcoming','upcoming':'Upcoming','not released':'Upcoming','hiatus':'On Hiatus','on hiatus':'On Hiatus','cancelled':'Cancelled','canceled':'Cancelled','discontinued':'Discontinued'};return labels[key]|| (raw?raw.replace(/\b\w/g,m=>m.toUpperCase()):'Status Unknown')}
 function statusClass(t){const s=titleStatus(t).toLowerCase();return s==='airing'?'airing':s==='ongoing'?'ongoing':s==='completed'?'completed':s==='upcoming'?'upcoming':s.includes('hiatus')?'hiatus':s==='cancelled'||s==='discontinued'?'cancelled':'unknown'}
-function card(t){const status=titleStatus(t);return '<article class="card" data-open="'+esc(t.id)+'" tabindex="0" role="button" aria-label="Open '+esc(titleName(t))+' · '+esc(status)+'"><div class="cover"><img loading="lazy" src="'+esc(img(t.cover_url))+'" alt="'+esc(titleName(t))+'" onerror="this.style.opacity=.15"><span class="badge">'+esc(media(t))+'</span><span class="status-badge status-'+statusClass(t)+'">'+esc(status)+'</span><span class="rating">★ '+esc(Number(t.rating||0).toFixed(1))+'</span></div><h3>'+esc(titleName(t))+'</h3><div class="meta">'+esc(t.release_year||'—')+'</div>'+(state.admin?'<div class="card-admin-actions"><button class="btn" type="button" data-quick-edit="'+esc(t.id)+'">✎ Edit entry</button></div>':'')+'</article>'}
+function card(t){const status=titleStatus(t);return '<article class="card" data-open="'+esc(t.id)+'" tabindex="0" role="button" aria-label="Open '+esc(titleName(t))+' · '+esc(status)+'"><div class="cover"><img loading="lazy" decoding="async" fetchpriority="low" src="'+esc(img(t.cover_url))+'" alt="'+esc(titleName(t))+'" onerror="this.style.opacity=.15"><span class="badge">'+esc(media(t))+'</span><span class="status-badge status-'+statusClass(t)+'">'+esc(status)+'</span><span class="rating">★ '+esc(Number(t.rating||0).toFixed(1))+'</span></div><h3>'+esc(titleName(t))+'</h3><div class="meta">'+esc(t.release_year||'—')+'</div>'+(state.admin?'<div class="card-admin-actions"><button class="btn" type="button" data-quick-edit="'+esc(t.id)+'">✎ Edit entry</button></div>':'')+'</article>'}
 function grid(list){return list.length?'<div class="grid">'+list.map(card).join('')+'</div>':'<div class="empty">No titles found yet. Try another search or check back soon.</div>'}
 function topTitle(text,sub=''){return '<div class="section-head"><div><h2>'+esc(text)+'</h2>'+(sub?'<p class="muted small">'+esc(sub)+'</p>':'')+'</div></div>'}
 let titlesLoadPromise=null;let titlesLoadedAt=0;const TITLES_CACHE_TTL=60*1000;const TITLES_STORAGE_CACHE_KEY='ryko-title-cache-v1';const TITLES_STORAGE_CACHE_TTL=24*60*60*1000;
@@ -1213,7 +1223,7 @@ async function loadTitles({force=false}={}){
     }
     collected.push(...rows);
     publish();
-    if(startupComplete&&rows.length)render(true);
+    
     if(rows.length<500)break;
     if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
    }
@@ -1421,21 +1431,21 @@ function home(){
  const titles=state.filtered,recs=recommendedTitles(),personalized=state.library.size>0||state.progress.size>0||state.recentViewed.length>0;
  const used=new Set();
  const unique=(items,limit)=>items.filter(t=>t&&!used.has(String(t.id))&&used.add(String(t.id))).slice(0,limit);
- const section=(heading,items,limit,sub='')=>{const rows=unique(items,limit);return rows.length?'<section class="section">'+topTitle(heading,sub)+grid(rows)+'</section>':''};
+ const section=(heading,items,limit,sub='')=>{const rows=unique(items,limit);return rows.length?'<section class="section home-lazy-section">'+topTitle(heading,sub)+grid(rows)+'</section>':''};
  const continueReading=state.titles.filter(t=>state.progress.get(t.id)?.reading_status==='Reading').sort((a,b)=>new Date(state.progress.get(b.id)?.updated_at||0)-new Date(state.progress.get(a.id)?.updated_at||0));
  const updated=state.titles.filter(t=>t.updated_at||t.updated_at_source||t.created_at).sort((a,b)=>new Date(b.updated_at||b.updated_at_source||b.created_at||0)-new Date(a.updated_at||a.updated_at_source||a.created_at||0));
  const upcoming=state.titles.filter(t=>/upcoming|announced|not yet aired|not yet released/i.test(String(t.status||''))||(/anime/i.test(media(t))&&Number(t.release_year)>new Date().getFullYear()));
  const trendingSub=state.trendingSource==='AniList trending charts'?'Ranked using AniList live trending charts · anime and manga':'Popular stories from the current catalogue · external trend data unavailable';
- return hero()
+ return '<div class="home-page">'+hero()
  +'<section class="discovery-strip"><div><span class="eyebrow">Your next story is waiting</span><strong>Not sure what to explore?</strong><p class="muted small">Discover something unexpected from the catalogue.</p></div><div class="discovery-actions"><button class="btn primary" type="button" data-random-discover>Surprise me ↗</button><a class="btn" href="#/browse">Browse all</a></div></section>'
- +section('Continue Reading',continueReading,8)
- +section('Recently Viewed',state.recentViewed.map(id=>state.titles.find(t=>String(t.id)===String(id))).filter(Boolean),8,'Saved on this device · only you can see this history')
- +section(personalized?'Recommended for You':'Popular picks',recs,8)
- +section('Trending This Week',state.trendingTitles,12,trendingSub)
- +section('New Additions',state.recentTitles,12)
- +section('Recently Updated',updated,12)
- +section('Upcoming Anime and Manga',upcoming,12)
- +'<section class="section">'+topTitle('Explore the catalogue')+filters()+grid(titles.slice(0,18))+(titles.length>18?'<div style="text-align:center;margin-top:22px"><a class="btn" href="#/browse">View all titles →</a></div>':'')+'</section>';
+ +section('Continue Reading',continueReading,6)
+ +section('Recently Viewed',state.recentViewed.map(id=>state.titles.find(t=>String(t.id)===String(id))).filter(Boolean),6,'Saved on this device · only you can see this history')
+ +section(personalized?'Recommended for You':'Popular picks',recs,6)
+ +section('Trending This Week',state.trendingTitles,8,trendingSub)
+ +section('New Additions',state.recentTitles,8)
+ +section('Recently Updated',updated,6)
+ +section('Upcoming Anime and Manga',upcoming,6)
+ +'<section class="section home-lazy-section">'+topTitle('Explore the catalogue')+filters()+grid(titles.slice(0,12))+(titles.length>12?'<div style="text-align:center;margin-top:22px"><a class="btn" href="#/browse">View all titles →</a></div>':'')+'</section></div>';
 }
 function filters(){const types=['All','Manga','Manhwa','Manhua','Anime','Movie','TV Series','Light Novel','Web Novel'];return '<div class="filters">'+types.map(x=>'<button class="chip '+(state.filter===x?'active':'')+'" data-filter="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div>'}
 function advancedFilters(){const genres=[...new Set(state.titles.flatMap(t=>(Array.isArray(t.genres)?t.genres:[]).concat(Array.isArray(t.themes)?t.themes:[])).filter(Boolean).map(g=>String(g).trim()))].sort((a,b)=>a.localeCompare(b));const statuses=['Ongoing','Completed','Hiatus','Upcoming','Cancelled'];const opt=(v,l,s)=>'<option value="'+esc(v)+'" '+(s?'selected':'')+'>'+esc(l)+'</option>';return '<div class="browse-advanced-filters"><label class="field"><span>Genre / theme</span><select data-browse-filter="genre">'+opt('All','All genres & themes',state.browseGenre==='All')+genres.map(g=>opt(g,g,state.browseGenre===g)).join('')+'</select></label><label class="field"><span>Status</span><select data-browse-filter="status">'+opt('All','All statuses',state.browseStatus==='All')+statuses.map(x=>opt(x,x,state.browseStatus===x)).join('')+'</select></label><label class="field"><span>Sort by</span><select data-browse-filter="sort">'+[['popular','Popular'],['rating','Highest rated'],['newest','Recently added'],['updated','Recently updated'],['title','Title A–Z']].map(([v,l])=>opt(v,l,state.browseSort===v)).join('')+'</select></label><button type="button" class="chip browse-clear" data-browse-clear>Reset</button></div>'}
