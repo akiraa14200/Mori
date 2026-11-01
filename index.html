@@ -798,6 +798,130 @@ textarea{overflow:auto}
 
 /* Separate YouTube-style landscape videos and vertical Shorts shelves */
 .videos-page{max-width:1180px}.videos-format-tabs{display:flex;gap:8px;overflow-x:auto;padding:5px 0 12px}.videos-format-tabs .chip{white-space:nowrap}.video-feed-section{margin:25px 0 36px}.video-feed-section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.video-feed-section-heading h2{font-size:22px;margin:0}.video-feed-shorts-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(145px,185px);gap:14px;overflow-x:auto;padding:2px 2px 14px;scroll-snap-type:x proximity}.video-feed-video-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 16px}.video-feed-card{min-width:0;margin:0;border-radius:17px}.video-feed-regular .video-feed-frame{aspect-ratio:16/9}.video-feed-short .video-feed-frame{aspect-ratio:9/16}.video-feed-short .video-feed-info{display:block;padding:10px}.video-feed-short .video-feed-copy>strong{font-size:13px}.video-feed-short .video-feed-creator{font-size:11px;margin-top:6px}.video-feed-short .video-feed-creator img{width:27px;height:27px}.video-feed-short .video-feed-actions{margin-top:9px}.video-feed-card[hidden],.video-feed-section[hidden]{display:none!important}@media(max-width:850px){.video-feed-video-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.video-feed-video-grid{grid-template-columns:1fr}.video-feed-shorts-row{grid-auto-columns:minmax(132px,42vw);gap:11px}.video-feed-section{margin:20px 0 28px}}
+
+/* Impeccable polish pass — preserve RykoCollection's dark/red identity */
+:root{
+ --radius-sm:8px;
+ --radius-md:12px;
+ --radius-lg:16px;
+ --radius-xl:22px;
+ --shadow-soft:0 10px 30px rgba(0,0,0,.22);
+ --focus-ring:0 0 0 3px rgba(240,68,82,.28);
+}
+html{scroll-padding-top:92px;scrollbar-color:#45434a #0b0c10;scrollbar-width:thin}
+body{background:radial-gradient(ellipse at 86% -18%,rgba(240,68,82,.105),transparent 38%),var(--bg);line-height:1.58}
+::selection{background:rgba(240,68,82,.36);color:#fff}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0b0c10}
+::-webkit-scrollbar-thumb{background:#34343c;border:2px solid #0b0c10;border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:#55535d}
+.wrap{width:min(1460px,100%);padding-inline:clamp(15px,3vw,38px)}
+.topbar{background:rgba(11,12,16,.97);border-bottom-color:rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.nav{height:72px;gap:clamp(14px,2vw,28px)}
+.brand{font-size:clamp(20px,2vw,25px);letter-spacing:-.055em}
+.navlinks{align-items:center;gap:clamp(12px,1.8vw,23px)}
+.navlinks a{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 2px;color:#bfc2cc;font-weight:560}
+.navlinks a[aria-current=page],.navlinks a.active{color:#fff}
+.navlinks .nav-icon{width:17px;height:17px;opacity:.85}
+.navright{gap:9px}
+.search{border-radius:12px;min-height:42px;background:#11131a;border-color:rgba(255,255,255,.12)}
+.search:focus{outline:none;border-color:rgba(240,68,82,.62);box-shadow:var(--focus-ring);background:#14161e}
+.icon-btn,.header-avatar-btn{border-radius:12px;background:#14161d;border-color:rgba(255,255,255,.12)}
+.icon-btn:hover,.header-avatar-btn:hover{background:#20232d;border-color:rgba(255,255,255,.2)}
+.btn,.iconbtn{border-radius:11px;min-height:42px;font-weight:650}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 5px 16px rgba(240,68,82,.17)}
+.btn.primary:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 8px 20px rgba(240,68,82,.23)}
+.btn:not(.primary):hover,.chip:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.22)}
+.chip{border-radius:10px;min-height:36px;font-weight:600}
+.chip.active{background:var(--accent-soft);border-color:rgba(240,68,82,.34);color:#ffb0b6}
+.hero{border-radius:22px;min-height:clamp(260px,39vw,500px);box-shadow:0 18px 48px rgba(0,0,0,.24)}
+.hero:after{background:linear-gradient(90deg,rgba(7,8,12,.88) 0%,rgba(7,8,12,.52) 48%,rgba(7,8,12,.08) 100%),linear-gradient(0deg,rgba(7,8,12,.55),transparent 55%)}
+.hero-copy{padding:clamp(20px,4vw,52px)}
+.hero h1{max-width:760px;text-wrap:balance}
+.hero p{max-width:58ch}
+.section{margin:clamp(30px,4vw,48px) 0}
+.section-head{margin-bottom:20px}
+.section h2{font-size:clamp(20px,2.1vw,25px);letter-spacing:-.035em;text-wrap:balance}
+.section-head p{line-height:1.55}
+.grid{gap:clamp(12px,1.5vw,19px)}
+.cover{border-radius:13px;background:var(--surface-2)}
+.card h3{font-size:13px;line-height:1.42;letter-spacing:-.01em}
+.card .meta{line-height:1.45}
+.card:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:14px}
+.panel,.entry-tab-panel{border-radius:16px}
+.panel h2{letter-spacing:-.025em}
+.entry-hero{border-radius:22px}
+.entry-tabs{border-radius:12px}
+.entry-tab{border-radius:9px}
+.fact{border-radius:10px}
+.videos-page{max-width:1160px}
+.video-feed-section{margin:30px 0 42px}
+.video-feed-section-heading{margin-bottom:16px}
+.video-feed-section-heading h2{font-size:clamp(20px,2vw,24px);letter-spacing:-.03em}
+.video-feed-shorts-row{gap:13px;scroll-padding-inline:2px}
+.video-feed-card{border-radius:15px;background:var(--surface-1);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.video-feed-card:hover{border-color:rgba(240,68,82,.3)}
+.video-feed-frame{background:#08090d}
+.video-feed-info{align-items:flex-start}
+.video-feed-copy>strong{letter-spacing:-.01em}
+.video-feed-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.video-feed-actions .btn,.video-feed-actions button{border-radius:10px}
+.related-video-card{border-radius:12px}
+.field input,.field select,.field textarea,.form-stack input,.form-stack select,.form-stack textarea,.admin-grid input,.admin-grid select,.admin-grid textarea{border-radius:10px}
+.empty{border-radius:16px;background:rgba(255,255,255,.018);line-height:1.6}
+.footer{margin-top:64px}
+.footer-social-link{border-radius:10px}
+.mobile-nav{border-radius:16px;background:rgba(17,19,26,.98);border-color:rgba(255,255,255,.13)}
+.mobile-nav button{border-radius:10px;min-height:54px}
+.mobile-nav button[aria-current=page],.mobile-nav button.active{background:var(--accent-soft);color:#ffb0b6}
+button:disabled,.btn:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
+@media(max-width:800px){
+ .nav{height:66px}
+ .hero{min-height:270px}
+ .navlinks{display:none}
+ .section{margin:30px 0 38px}
+}
+@media(max-width:600px){
+ .wrap{padding-inline:15px}
+ .nav{height:62px}
+ .hero{min-height:250px;margin:16px 0 24px;border-radius:17px}
+ .hero-copy{padding:18px}
+ .hero h1{font-size:clamp(25px,7vw,34px);max-width:95%}
+ .hero p{font-size:12px;max-width:46ch}
+ .section-head{align-items:flex-start}
+ .section h2{font-size:19px}
+ .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
+ .card h3{font-size:12px}
+ .video-feed-section{margin:22px 0 30px}
+ .video-feed-section-heading h2{font-size:19px}
+ .video-feed-video-grid{grid-template-columns:1fr;gap:14px}
+ .video-feed-regular .video-feed-card{display:grid;grid-template-columns:minmax(118px,40%) minmax(0,1fr);align-items:stretch}
+ .video-feed-regular .video-feed-frame{aspect-ratio:16/10;min-height:100%;height:100%}
+ .video-feed-regular .video-feed-info{display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:11px}
+ .video-feed-regular .video-feed-actions{width:100%}
+ .video-feed-regular .video-feed-actions>*{flex:1;text-align:center;justify-content:center}
+ .video-feed-shorts-row{grid-auto-columns:minmax(132px,39vw);gap:10px}
+ .mobile-nav{left:10px;right:10px;bottom:calc(9px + env(safe-area-inset-bottom))}
+ .mobile-nav button{min-height:52px}
+ .footer{padding-bottom:calc(116px + env(safe-area-inset-bottom))}
+}
+@media(max-width:390px){
+ .wrap{padding-inline:12px}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 11px}
+ .card h3{font-size:12px}
+ .video-feed-regular .video-feed-card{grid-template-columns:minmax(108px,38%) minmax(0,1fr)}
+ .video-feed-regular .video-feed-info{padding:9px}
+ .video-feed-copy>strong{font-size:12px}
+ .video-feed-regular .video-feed-actions .btn{font-size:11px;padding:7px 8px}
+}
+@media(hover:none){
+ .card:hover .cover img,.news-card:hover,.related-video-card:hover,.video-feed-card:hover{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+}
+
 </style>
 </head>
 <body>
