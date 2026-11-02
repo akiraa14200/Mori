@@ -1838,7 +1838,7 @@ function storagePathFromPublicUrl(bucket,url){
   const parsed=new URL(url,location.origin);
   const markers=['/storage/v1/object/public/'+bucket+'/','/storage/v1/object/sign/'+bucket+'/','/storage/v1/object/authenticated/'+bucket+'/'];
   for(const marker of markers){const at=parsed.pathname.indexOf(marker);if(at>=0)return parsed.pathname.slice(at+marker.length).split('/').map(part=>decodeURIComponent(part)).join('/')}
-  if(!/^https?:/i.test(String(url)))return String(url).replace(/^\\/+/, '');
+  if(!/^https?:/i.test(String(url)))return String(url).replace(/^\/+/, '');
   return null;
  }catch{return null}
 }
