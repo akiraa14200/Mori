@@ -1,9 +1,10 @@
 name: Preview syntax check
 on:
   push:
-    branches: [feature/videos-feed]
+    branches: [remove-footer-credits, main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 jobs:
   inline-js:
     runs-on: ubuntu-latest
