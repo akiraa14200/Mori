@@ -2175,9 +2175,17 @@ async function submitComment(e){
   }
   const spoiler=!!form.elements.spoiler?.checked,kind=form.elements.kind?.value==='review'?'review':'comment',rating=kind==='review'&&form.elements.rating?.value?Number(form.elements.rating.value):null;if(kind==='review'&&!body){status.textContent='Write a review before posting.';if(button)button.disabled=false;return}const {data,error}=await db.from('community_comments').insert({title_id:t.id,user_id:state.user.id,body,media_url,media_path,media_type,spoiler,kind,rating}).select('id,user_id,body,media_url,media_path,media_type,moderation_status,moderation_reason,created_at,parent_comment_id,spoiler,kind,rating').single();
   if(error)throw error;
-  uploadedPath=null;const hydratedComment=(await hydrateCommunityMedia([data]))[0];state.comments.unshift(hydratedComment);state.replyingTo=null;
+  let finalData=data;
+  if(media_path){
+   status.textContent='Checking image safety…';
+   const {error:checkError}=await db.functions.invoke('moderate-community-image',{body:{comment_id:data.id}});
+   if(checkError)console.warn('Automatic image check did not complete; keeping upload hidden:',checkError.message);
+   const refreshed=await db.from('community_comments').select('id,user_id,body,media_url,media_path,media_type,moderation_status,moderation_reason,created_at,parent_comment_id,spoiler,kind,rating').eq('id',data.id).single();
+   if(!refreshed.error&&refreshed.data)finalData=refreshed.data;
+  }
+  uploadedPath=null;const hydratedComment=(await hydrateCommunityMedia([finalData]))[0];state.comments.unshift(hydratedComment);state.replyingTo=null;
   if(!state.profiles[state.user.id]){const {data:p}=await db.from('profiles').select('id,username,display_name,avatar_url').eq('id',state.user.id).maybeSingle();if(p)state.profiles[p.id]=p}
-  form.reset();status.textContent=data.moderation_status==='pending'?'Submitted. Your comment or image is hidden until an admin reviews it.':'';const posts=document.getElementById('entry-posts');if(posts)posts.innerHTML=reviewCards();bindCommentControls();notify(data.moderation_status==='pending'?'Submitted for review':'Comment posted');
+  form.reset();status.textContent=finalData.moderation_status==='approved'?'':finalData.moderation_status==='rejected'?'This image was blocked by the automatic safety check.': 'Submitted. The image is hidden until the safety check or admin review is complete.';const posts=document.getElementById('entry-posts');if(posts)posts.innerHTML=reviewCards();bindCommentControls();notify(finalData.moderation_status==='approved'?'Comment posted':finalData.moderation_status==='rejected'?'Image blocked':'Submitted for safety review');
  }catch(err){if(uploadedPath)await db.storage.from('community-media').remove([uploadedPath]);status.textContent=err.message||'Unable to post. Please try again.'}
  finally{if(button)button.disabled=false}
 }
