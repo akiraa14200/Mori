@@ -2192,6 +2192,7 @@ async function submitReply(e){
   const {data,error}=await db.from('community_comments').insert({title_id:state.selected.id,user_id:state.user.id,body,parent_comment_id:id,kind:'comment'}).select('id,user_id,body,media_url,media_path,media_type,moderation_status,moderation_reason,created_at,parent_comment_id,spoiler,kind,rating').single();
   if(error)throw error;
   state.comments.push(data);state.replyingTo=null;state.replyingMention='';state.expandedReplies.add(id);
+  if(data.moderation_status==='pending'){const posts=document.getElementById('entry-posts');if(posts)posts.innerHTML=reviewCards();bindCommentControls();notify('Reply submitted for admin review');return}
   const myProfile=state.profiles[state.user.id];
   const senderName=myProfile?.username||myProfile?.display_name||'A reader';
   const targets=new Map();
