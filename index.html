@@ -1303,6 +1303,37 @@ img{height:auto}
   .related-video-card-meta strong{font-size:15px}
 }
 
+
+/* Mobile performance pass: reduce GPU-heavy paint work and keep native scrolling responsive. */
+@media(max-width:760px){
+  html,body{scroll-behavior:auto!important;overscroll-behavior-x:none}
+  *,*::before,*::after{
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+  }
+  .card,.panel,.library-row,.character,.review,.video-feed-card,
+  .cover,.entry-hero,.profile-preview-card{
+    box-shadow:none!important;
+    transition:none!important;
+  }
+  .cover img,.hero-art,.entry-banner,.character img{
+    filter:none!important;
+    transition:none!important;
+  }
+  .hero-art,.hero-copy,.review,.loading-spinner,.ryko-loader-progress:after{
+    animation:none!important;
+  }
+  .home-lazy-section,.video-feed-section{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 560px;
+  }
+  .mobile-nav{box-shadow:0 -5px 22px rgba(0,0,0,.18)!important}
+}
+@media(prefers-reduced-motion:reduce){
+  html,body{scroll-behavior:auto!important}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -1407,7 +1438,8 @@ async function loadTitles({force=false}={}){
     if(Array.isArray(cached?.titles)&&cached.titles.length&&Date.now()-Number(cached.savedAt||0)<TITLES_STORAGE_CACHE_TTL)setCatalogue(cached.titles);
    }catch(error){console.warn('Saved catalogue cache unavailable:',error)}
   }
-  const publish=()=>setCatalogue(collected);
+  let publishedCount=0;
+  const publish=()=>{setCatalogue(collected);publishedCount=collected.length};
   try{
    for(let from=0;from<100000;from+=500){
     let rows=[],clientError=null;
@@ -1421,8 +1453,10 @@ async function loadTitles({force=false}={}){
      catch(restError){throw new Error('Primary request: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
     }
     collected.push(...rows);
-    publish();
-    
+    // Publish the first page for a fast initial view, then batch all remaining
+    // pages into one final index/filter rebuild instead of rebuilding per page.
+    if(from===0)publish();
+
     if(rows.length<500)break;
     if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
    }
@@ -1436,7 +1470,8 @@ async function loadTitles({force=false}={}){
    if(state.titles.length)notify('Could not refresh the catalogue. Showing the most recently saved entries.');
    else notify('Could not load entries. Please check your connection and retry.');
   }
-  loadCharacterSearchIndex().catch(e=>console.warn('Character search index unavailable:',e));
+  // Rebuild once after pagination (or publish any partial result after a failure).
+  if(collected.length!==publishedCount)publish();
   if(state.titles.length)fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
   if(startupComplete)render(true);
   return state.titles;
@@ -1478,7 +1513,32 @@ function searchScore(x,rawQuery){
 function applyFilters(){const q=state.search.trim();const source=state.titleIndex.length?state.titleIndex:state.titles.map(t=>({t,names:[titleName(t)].map(RykoUtils.normalizeSearchText),characterNames:[],genreText:'',text:''}));const rows=source.map(x=>({...x,search:searchScore(x,q)})).filter(x=>(!q||x.search.score>0)&&(state.filter==='All'||media(x.t)===state.filter)&&(state.browseStatus==='All'||String(x.t.status||'Ongoing')===state.browseStatus)&&(state.browseGenre==='All'||[...(Array.isArray(x.t.genres)?x.t.genres:[]),...(Array.isArray(x.t.themes)?x.t.themes:[])].some(g=>String(g).toLocaleLowerCase()===state.browseGenre.toLocaleLowerCase())));const score=t=>Number(t.popularity||0)+Number(t.rating||0)*10+(t.is_trending?1000:0)+(t.is_featured?1500:0);rows.sort((a,b)=>{const x=a.t,y=b.t;if(state.browseSort==='rating')return Number(y.rating||0)-Number(x.rating||0);if(state.browseSort==='newest')return new Date(y.created_at||0)-new Date(x.created_at||0);if(state.browseSort==='updated')return new Date(y.updated_at||y.updated_at_source||y.created_at||0)-new Date(x.updated_at||x.updated_at_source||x.created_at||0);if(state.browseSort==='title')return titleName(x).localeCompare(titleName(y));if(state.browseSort==='relevance'&&q)return b.search.score-a.search.score||score(y)-score(x);return score(y)-score(x)});state.filtered=rows.map(x=>x.t)}
 async function refreshNotificationBadge(){const badge=document.getElementById('notification-badge');if(!badge)return;if(!state.user){badge.classList.add('hidden');return}const {count,error}=await db.from('reader_notifications').select('id',{count:'exact',head:true}).eq('user_id',state.user.id).is('read_at',null);if(error){console.warn('Notification count unavailable',error.message);return}badge.textContent=String(Math.min(count||0,99));badge.classList.toggle('hidden',!(count>0))}
 async function toggleNotifications(){if(!state.user){location.hash='#/account';return notify('Sign in to view notifications.')}const old=document.getElementById('notification-popover');if(old){old.remove();return}const {data,error}=await db.from('reader_notifications').select('id,title,body,target_url,read_at,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(30);const rows=data||[],panel=document.createElement('aside');panel.id='notification-popover';panel.className='notification-popover';panel.innerHTML='<div class="section-head"><div><h2 style="font-size:18px;margin:0">Notifications</h2><p class="muted small">Release alerts and reading updates</p></div><button class="chip" id="notification-close">Close</button></div>'+(error?'<p class="muted small">Could not load notifications.</p>':rows.length?rows.map(n=>'<a class="notification-row '+(!n.read_at?'unread':'')+'" href="'+esc(n.target_url||'#/library')+'" data-notification-id="'+esc(n.id)+'"><div><strong>'+esc(n.title)+'</strong><p>'+esc(n.body||'')+'</p><span class="muted small">'+esc(fmtDate(n.created_at))+'</span></div></a>').join(''):'<p class="muted small">You’re all caught up.</p>');document.body.appendChild(panel);panel.querySelector('#notification-close').onclick=()=>panel.remove();panel.querySelectorAll('[data-notification-id]').forEach(a=>a.onclick=async e=>{await db.from('reader_notifications').update({read_at:new Date().toISOString()}).eq('id',a.dataset.notificationId).eq('user_id',state.user.id);if(a.getAttribute('href').startsWith('#/')){e.preventDefault();location.hash=a.getAttribute('href').slice(1);panel.remove()}refreshNotificationBadge()})}
-async function checkLibraryReleaseAlerts(){if(!state.user)return;for(const t of state.titles.filter(t=>state.library.has(t.id)&&t.anilist_id).slice(0,20)){try{const query='query ($id:Int){Media(id:$id,type:ANIME){title{english romaji} nextAiringEpisode{airingAt episode timeUntilAiring}}}';const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id:Number(t.anilist_id)}}),signal:AbortSignal.timeout(9000)});if(!res.ok)continue;const m=(await res.json()).data?.Media,ep=m?.nextAiringEpisode;if(!ep||ep.timeUntilAiring>259200)continue;await db.from('reader_notifications').upsert({user_id:state.user.id,title_id:t.id,kind:'release',title:'New episode coming soon',body:(m.title?.english||m.title?.romaji||t.name)+' · Episode '+ep.episode+' · '+(ep.timeUntilAiring<3600?'in less than an hour':'in '+Math.ceil(ep.timeUntilAiring/3600)+' hours'),target_url:'#/title/'+t.id,scheduled_at:new Date(ep.airingAt*1000).toISOString(),dedupe_key:'anime:'+t.id+':'+ep.episode+':'+ep.airingAt},{onConflict:'user_id,dedupe_key',ignoreDuplicates:true})}catch(e){console.warn('Release alert check skipped',e)}}refreshNotificationBadge()}
+let releaseAlertCheckPromise=null;
+async function checkLibraryReleaseAlerts(){
+ if(!state.user)return;
+ const userId=state.user.id,cacheKey='ryko-release-alert-check-v1:'+userId;
+ try{const last=Number(localStorage.getItem(cacheKey)||0);if(Date.now()-last<30*60*1000)return}catch{}
+ if(releaseAlertCheckPromise)return releaseAlertCheckPromise;
+ releaseAlertCheckPromise=(async()=>{
+  const titles=state.titles.filter(t=>state.library.has(t.id)&&t.anilist_id).slice(0,20);
+  // Keep external checks bounded and avoid repeating the same work on every route change.
+  for(let i=0;i<titles.length;i+=4){
+   await Promise.allSettled(titles.slice(i,i+4).map(async t=>{
+    try{
+     const query='query ($id:Int){Media(id:$id,type:ANIME){title{english romaji} nextAiringEpisode{airingAt episode timeUntilAiring}}}';
+     const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id:Number(t.anilist_id)}}),signal:AbortSignal.timeout(9000)});
+     if(!res.ok)return;
+     const m=(await res.json()).data?.Media,ep=m?.nextAiringEpisode;
+     if(!ep||ep.timeUntilAiring>259200)return;
+     await db.from('reader_notifications').upsert({user_id:userId,title_id:t.id,kind:'release',title:'New episode coming soon',body:(m.title?.english||m.title?.romaji||t.name)+' · Episode '+ep.episode+' · '+(ep.timeUntilAiring<3600?'in less than an hour':'in '+Math.ceil(ep.timeUntilAiring/3600)+' hours'),target_url:'#/title/'+t.id,scheduled_at:new Date(ep.airingAt*1000).toISOString(),dedupe_key:'anime:'+t.id+':'+ep.episode+':'+ep.airingAt},{onConflict:'user_id,dedupe_key',ignoreDuplicates:true});
+    }catch(e){console.warn('Release alert check skipped',e)}
+   }));
+  }
+  try{localStorage.setItem(cacheKey,String(Date.now()))}catch{}
+  await refreshNotificationBadge();
+ })().finally(()=>{releaseAlertCheckPromise=null});
+ return releaseAlertCheckPromise;
+}
 const aniListMediaCache=new Map();
 const aniListMediaRequests=new Map();
 const ANILIST_MEDIA_TTL=15*60*1000;
@@ -2302,7 +2362,7 @@ function showSearchSuggestions(){
  else searchSuggestions.innerHTML='<div class="search-suggestion-label">QUICK RESULTS</div>'+results.map(({t,reasons})=>'<button class="search-suggestion" type="button" role="option" data-search-open="'+esc(t.id)+'"><img src="'+esc(img(t.cover_url))+'" alt="" loading="lazy"><span class="search-suggestion-copy"><strong>'+esc(titleName(t))+'</strong><small>'+esc(media(t))+' · '+esc(t.release_year||'Year unknown')+(reasons.length?' · '+esc(reasons.join(', ')):'')+'</small></span><span class="search-suggestion-arrow">↗</span></button>').join('')+'<button class="search-all-results" type="button" data-search-all>See all results for “'+esc(raw)+'” →</button>';
  positionSearchSuggestions();searchSuggestions.classList.remove('hidden');searchInput.setAttribute('aria-expanded','true')
 }
-searchInput.addEventListener('focus',()=>showSearchSuggestions());window.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('scroll',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});searchInput.addEventListener('input',e=>{state.search=e.target.value;state.browsePage=1;showSearchSuggestions();clearTimeout(searchDebounce);searchDebounce=setTimeout(()=>{applyFilters();if(!['/title/','/account','/admin','/news','/profile/'].some(x=>state.route.startsWith(x))){if(state.route==='/')render();else if(state.route==='/browse')render()}},140)});
+searchInput.addEventListener('focus',()=>showSearchSuggestions());window.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('scroll',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});searchInput.addEventListener('input',e=>{state.search=e.target.value;state.browsePage=1;showSearchSuggestions();clearTimeout(searchDebounce);searchDebounce=setTimeout(()=>{if(state.search.trim().length>=2&&!state.characterSearchLoaded)loadCharacterSearchIndex().then(()=>{if(searchInput.value.trim().length>=2)showSearchSuggestions()});applyFilters();if(!['/title/','/account','/admin','/news','/profile/'].some(x=>state.route.startsWith(x))){if(state.route==='/')render();else if(state.route==='/browse')render()}},180)});
 searchInput.addEventListener('keydown',e=>{if(e.key==='Escape'){hideSearchSuggestions();return}if(e.key==='Enter'){e.preventDefault();saveSearch(searchInput.value);hideSearchSuggestions();location.hash='#/browse';render()}});
 searchSuggestions.addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault()});
 searchSuggestions.addEventListener('click',e=>{const item=e.target.closest('[data-search-open]');if(item){saveSearch(searchInput.value);hideSearchSuggestions();searchInput.blur();openTitle(item.dataset.searchOpen);return}const recent=e.target.closest('[data-search-recent]');if(recent){searchInput.value=recent.dataset.searchRecent;state.search=searchInput.value;searchInput.focus();showSearchSuggestions();return}if(e.target.closest('[data-search-all]')){saveSearch(searchInput.value);hideSearchSuggestions();location.hash='#/browse';render()}});
