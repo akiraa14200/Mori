@@ -1900,13 +1900,7 @@ async function submitReply(e){
   const {data,error}=await db.from('community_comments').insert({title_id:state.selected.id,user_id:state.user.id,body,parent_comment_id:id,kind:'comment'}).select('id,user_id,body,media_url,media_type,created_at,parent_comment_id,spoiler,kind,rating').single();
   if(error)throw error;
   state.comments.push(data);state.replyingTo=null;state.replyingMention='';state.expandedReplies.add(id);
-  const myProfile=state.profiles[state.user.id];
-  const senderName=myProfile?.username||myProfile?.display_name||'A reader';
-  const targets=new Map();
-  if(parent.user_id&&parent.user_id!==state.user.id)targets.set(parent.user_id,'reply:'+id+':'+data.id);
-  const mentionNames=[...new Set([...body.matchAll(/(^|\s)@([a-zA-Z0-9_]{2,32})\b/g)].map(m=>m[2].toLowerCase()))].slice(0,5);
-  if(mentionNames.length){const {data:mentioned}=await db.from('profiles').select('id,username').in('username',mentionNames);(mentioned||[]).forEach(p=>{if(p.id!==state.user.id)targets.set(p.id,'mention:'+data.id+':'+p.id)})}
-  if(targets.size){const rows=[...targets.entries()].map(([user_id,dedupe_key])=>({user_id,title_id:state.selected.id,kind:dedupe_key.startsWith('mention:')?'mention':'reply',title:dedupe_key.startsWith('mention:')?'You were mentioned':'New reply to your comment',body:dedupe_key.startsWith('mention:')?senderName+' mentioned you in a discussion.':senderName+' replied to your comment.',target_url:'#/title/'+state.selected.id,scheduled_at:new Date().toISOString(),dedupe_key}));const {error:notifyError}=await db.from('reader_notifications').upsert(rows,{onConflict:'user_id,dedupe_key',ignoreDuplicates:true});if(notifyError)console.warn('Community notification skipped:',notifyError.message)}
+  // Reply notifications are created by the database trigger, not by the client.
   refreshNotificationBadge();
   if(!state.profiles[state.user.id]){const {data:p}=await db.from('profiles').select('id,username,display_name,avatar_url').eq('id',state.user.id).maybeSingle();if(p)state.profiles[p.id]=p}
   const posts=document.getElementById('entry-posts');if(posts)posts.innerHTML=reviewCards();bindCommentControls();notify('Reply posted');
