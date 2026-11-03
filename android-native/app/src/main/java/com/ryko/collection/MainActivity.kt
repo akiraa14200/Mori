@@ -209,42 +209,36 @@ private fun RykoApp(api: Backend) {
                             }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
                         }
                     }
-                    "Video" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    "Video" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         item {
-                            Text("RYKO VIDEO FEED", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                            Text("Clips from your entries.", color = White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("YouTube and Instagram videos added to each title appear here automatically.", color = Muted, fontSize = 13.sp)
-                            Spacer(Modifier.height(4.dp))
-                            Text("${relatedVideos.size} videos", color = Gold, fontSize = 12.sp)
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text("RYKO VIDEO", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                                Text("Watch & discover.", color = White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("\${relatedVideos.size} videos from your entries", color = Muted, fontSize = 12.sp)
+                            }
                         }
-                        if (relatedVideos.isEmpty()) {
-                            item { EmptyState("No videos added yet", "When you add a YouTube or Instagram video to an entry on Ryko Collection, it will show up here.") {} }
-                        } else {
-                            items(relatedVideos, key = { it.id }) { video ->
-                                val parent = titles.firstOrNull { it.id == video.titleId }
-                                Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier.fillMaxWidth().clickable { openVideoUrl(video.videoUrl) }) {
-                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            if (parent?.cover?.isNotBlank() == true) AsyncImage(model = parent.cover, contentDescription = parent.name,
-                                                modifier = Modifier.size(width = 62.dp, height = 76.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(parent?.name ?: "Ryko entry", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                Text(video.videoTitle.ifBlank { if (video.platform == "instagram") "Instagram video" else "YouTube video" },
-                                                    color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                Text(if (video.creatorName.isNotBlank()) video.creatorName else video.platform.replaceFirstChar { it.uppercase() },
-                                                    color = Muted, fontSize = 12.sp)
-                                            }
-                                        }
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            AssistChip(onClick = { openVideoUrl(video.videoUrl) },
-                                                label = { Text(if (video.platform == "instagram") "Instagram" else "YouTube") },
-                                                leadingIcon = { Icon(Icons.Default.PlayCircle, null) })
-                                            if (video.actionUrl.isNotBlank()) TextButton(onClick = { openVideoUrl(video.actionUrl) }) {
-                                                Text(if (video.actionType == "read") "Open entry link" else "Watch video", color = Gold)
-                                            }
-                                        }
+                        items(relatedVideos, key = { it.id }) { video ->
+                            val parent = titles.firstOrNull { it.id == video.titleId }
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp).background(Panel, RoundedCornerShape(18.dp))
+                                .clickable { playingVideo = video }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.fillMaxWidth().height(190.dp).background(Ink, RoundedCornerShape(13.dp))) {
+                                    val thumb = videoThumbnail(video)
+                                    if (thumb != null) AsyncImage(model = thumb, contentDescription = video.videoTitle, modifier = Modifier.fillMaxSize())
+                                    else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(if (video.platform == "instagram") Icons.Default.CameraAlt else Icons.Default.PlayCircle, null, tint = Color(0xFFB9A5FF), modifier = Modifier.size(52.dp))
                                     }
+                                    Surface(color = Color(0xD9000000), shape = RoundedCornerShape(30.dp), modifier = Modifier.align(Alignment.Center)) {
+                                        Icon(Icons.Default.PlayArrow, null, tint = White, modifier = Modifier.padding(10.dp).size(28.dp))
+                                    }
+                                    Surface(color = Color(0xDD171923), shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.TopStart).padding(9.dp)) {
+                                        Text(video.platform.uppercase(), color = White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                                    }
+                                }
+                                Text(video.videoTitle.ifBlank { parent?.name ?: "Ryko video" }, color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(parent?.name ?: "Ryko Collection", color = Color(0xFFB9A5FF), fontSize = 11.sp)
+                                    Spacer(Modifier.weight(1f))
+                                    Text(video.creatorName.ifBlank { video.platform }, color = Muted, fontSize = 11.sp)
                                 }
                             }
                         }
@@ -337,6 +331,29 @@ private fun RykoApp(api: Backend) {
             dismissButton = { TextButton(onClick = { showAuth = false }) { Text("Cancel") } },
             containerColor = Panel
         )
+
+        playingVideo?.let { video ->
+            Dialog(onDismissRequest = { playingVideo = null }) {
+                Column(Modifier.fillMaxWidth().background(Color(0xFF090B10), RoundedCornerShape(18.dp)).padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(video.videoTitle.ifBlank { "Ryko video" }, color = White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        IconButton(onClick = { playingVideo = null }) { Icon(Icons.Default.Close, null, tint = White) }
+                    }
+                    AndroidView(factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = true
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            webChromeClient = WebChromeClient()
+                            setBackgroundColor(android.graphics.Color.BLACK)
+                            loadDataWithBaseURL("https://www.youtube-nocookie.com", playerHtml(video.videoUrl, video.platform), "text/html", "UTF-8", null)
+                        }
+                    }, modifier = Modifier.fillMaxWidth().height(240.dp))
+                    Text(video.platform.replaceFirstChar { it.uppercase() } + " • Plays inside Ryko", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(8.dp))
+                }
+            }
+        }
 
         selected?.let { title ->
             var comments by remember(title.id) { mutableStateOf<JSONArray?>(null) }
@@ -464,3 +481,50 @@ private fun openVideo(title: String) { val c = RykoAppContext.current ?: return;
 private object RykoAppContext { var current: android.content.Context? = null }
 
 private fun openVideoUrl(url: String) { val c = RykoAppContext.current ?: return; if (url.startsWith("https://") || url.startsWith("http://")) c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+
+@Composable
+private fun HomeSection(title: String, subtitle: String, data: List<RykoTitle>, onSelect: (RykoTitle) -> Unit, onSeeAll: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { Text(title, color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = Muted, fontSize = 11.sp) }
+            TextButton(onClick = onSeeAll) { Text("View all  ›", color = Color(0xFFB9A5FF)) }
+        }
+        LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(data, key = { it.id }) { item ->
+                Column(Modifier.width(132.dp).clickable { onSelect(item) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.fillMaxWidth().height(184.dp).background(Panel, RoundedCornerShape(13.dp))) {
+                        if (item.cover.isNotBlank()) AsyncImage(model = item.cover, contentDescription = item.name, modifier = Modifier.fillMaxSize())
+                        Surface(color = Color(0xDD171923), shape = RoundedCornerShape(7.dp), modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
+                            Text(item.type.uppercase(), color = White, fontSize = 8.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
+                        }
+                    }
+                    Text(item.name, color = White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(item.status, color = Muted, fontSize = 10.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+private fun youtubeId(url: String): String? {
+    val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+    return when (uri.host?.lowercase()) {
+        "youtu.be" -> uri.lastPathSegment
+        "youtube.com", "www.youtube.com", "m.youtube.com", "www.youtube-nocookie.com" ->
+            uri.getQueryParameter("v") ?: uri.pathSegments.firstOrNull { it == "embed" || it == "shorts" }?.let { marker ->
+                val index = uri.pathSegments.indexOf(marker); uri.pathSegments.getOrNull(index + 1)
+            }
+        else -> null
+    }?.takeIf { it.isNotBlank() }
+}
+private fun videoThumbnail(video: RykoRelatedVideo): String? =
+    youtubeId(video.videoUrl)?.let { "https://img.youtube.com/vi/$it/hqdefault.jpg" }
+private fun playerHtml(url: String, platform: String): String {
+    val yt = youtubeId(url)
+    val src = if (yt != null) "https://www.youtube-nocookie.com/embed/$yt?autoplay=1&playsinline=1"
+        else if (platform == "instagram") {
+            val uri = Uri.parse(url)
+            val host = uri.host?.lowercase().orEmpty()
+            if (host.endsWith("instagram.com") || host.endsWith("instagr.am")) "https://www.instagram.com\${uri.path.orEmpty().trimEnd('/')}/embed" else url
+        } else url
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="$src" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>"""
+}
