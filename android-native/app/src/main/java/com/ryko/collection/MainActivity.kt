@@ -326,6 +326,8 @@ private fun RykoApp(api: Backend) {
                             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             settings.useWideViewPort = true
                             settings.loadWithOverviewMode = true
+                            settings.javaScriptCanOpenWindowsAutomatically = false
+                            settings.setSupportMultipleWindows(false)
                             settings.builtInZoomControls = false
                             settings.displayZoomControls = false
                             webViewClient = WebViewClient()
@@ -641,10 +643,12 @@ private fun playerHtml(url: String, platform: String): String {
             "https://www.instagram.com${uri?.path.orEmpty().trimEnd('/')}/embed/" else null
     } else null
     if (yt == null && instagramSrc == null) return """<!doctype html><html><body style="margin:0;background:#101116;color:#ddd;font:14px Arial;display:grid;place-items:center;height:100vh;text-align:center">This link is not supported for embedded playback.</body></html>"""
+    // Match the proven browser implementation in the user's comic project:
+    // a responsive 16:9 page containing YouTube's official privacy-enhanced iframe.
     val src = if (yt != null) "https://www.youtube-nocookie.com/embed/" + yt + "?rel=0&playsinline=1&controls=1&enablejsapi=1" else instagramSrc!!
-    val fallback = if (yt != null) """<div id="error">This video cannot be embedded.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank">Open original on YouTube</a></div>""" else ""
+    val fallback = if (yt != null) """<div id="error" role="status">This video cannot be embedded or is unavailable.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank" rel="noopener noreferrer">Open original on YouTube</a></div>""" else ""
     val title = if (yt != null) "YouTube trailer" else "Instagram video"
-    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px}a{color:#c2adff}</style></head><body>$fallback<iframe id="player" src="$src" title="$title" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');if(e){window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid')}</script></body></html>"""
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block;background:#08090d}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px;font:14px Arial}a{color:#c2adff}</style></head><body>$fallback<iframe id="player" src="$src" title="$title" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');if(e){window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid')}</script></body></html>"""
 }
 
 private class FullscreenChromeClient(private val activity: Activity) : WebChromeClient() {
