@@ -3,6 +3,7 @@ package com.rykocollection.app.data
 import com.rykocollection.app.model.CatalogueTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
@@ -64,6 +65,8 @@ class CatalogueRepository {
                     }
                 }
             }.let { Result.success(it) }
+        } catch (timeout: TimeoutCancellationException) {
+            Result.failure(IllegalStateException("Catalogue request timed out. Check your connection and retry.", timeout))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
