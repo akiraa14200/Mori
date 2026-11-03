@@ -7,8 +7,13 @@ const cors = {
 };
 const reply = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
-  headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=30, s-maxage=120", ...cors },
+  headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600", ...cors },
 });
+// Reuse provider results in warm serverless instances and coalesce duplicate searches.
+const providerResultCache = new Map();
+const providerInFlight = new Map();
+const PROVIDER_CACHE_TTL = 5 * 60 * 1000;
+const PROVIDER_CACHE_LIMIT = 120;
 const clean = (v) => typeof v === "string" ? v.trim() : "";
 const statusMap = (v) => {
   const s = String(Array.isArray(v) ? v.map(x => typeof x === "string" ? x : x?.status || x?.name || "").join(" ") : v || "").toLowerCase();
@@ -24,7 +29,7 @@ const safeFetch = async (url, options = {}) => {
   let lastError;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(12000) });
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(8500) });
       if (res.ok) {
         try { return await res.json(); }
         catch { throw new Error("Upstream returned invalid JSON (HTTP " + res.status + ")"); }
@@ -34,9 +39,9 @@ const safeFetch = async (url, options = {}) => {
       error.status = res.status;
       lastError = error;
       // Retry only transient failures; do not repeat invalid requests.
-      if (attempt === 0 && [429, 500, 502, 503, 504].includes(res.status)) {
-        const retryAfter = Number(res.headers.get("retry-after"));
-        await pause(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 1800) : 700);
+      // A 429 means the upstream is rate-limiting this client; do not retry it immediately.
+      if (attempt === 0 && [408, 500, 502, 503, 504].includes(res.status)) {
+        await pause(250);
         continue;
       }
       throw error;
@@ -289,23 +294,41 @@ async function handleCatalogueRequest(request) {
   const type = ["Anime","Manga","Manhwa","Manhua","Movie","TV Series"].includes(requestedType) ? requestedType : "Manga";
   if (q.length < 2) return reply({error:"Enter at least two characters."},400);
   if (!["kitsu","wikidata","wikidata-india","mangaupdates","jikan","anilist","omdb","tvmaze"].includes(provider)) return reply({error:"Unknown provider."},400);
+  const cacheKey=provider+"|"+type+"|"+q.toLowerCase().replace(/\s+/g," ").trim();
+  const cached=providerResultCache.get(cacheKey);
+  if(cached&&Date.now()-cached.savedAt<PROVIDER_CACHE_TTL){
+    providerResultCache.delete(cacheKey);providerResultCache.set(cacheKey,cached);
+    return reply({provider,items:cached.items});
+  }
   try {
-    let items;
-    if (provider === "kitsu") items = await searchKitsu(q,type);
-    else if (provider === "wikidata") items = await searchWikidata(q,type);
-    else if (provider === "wikidata-india") items = await searchIndianMovies(q);
-    else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
-    else if (provider === "jikan") items = await searchJikan(q,type);
-    else if (provider === "omdb") items = await searchOMDb(q,type);
-    else if (provider === "tvmaze") {
-      if (type !== "TV Series") throw new Error("TVmaze is a free provider for TV series only. Select TV Series as the media type.");
-      items = await searchTVMaze(q);
+    let task=providerInFlight.get(cacheKey);
+    if(!task){
+      task=(async()=>{
+        let items;
+        if (provider === "kitsu") items = await searchKitsu(q,type);
+        else if (provider === "wikidata") items = await searchWikidata(q,type);
+        else if (provider === "wikidata-india") items = await searchIndianMovies(q);
+        else if (provider === "mangaupdates") items = await searchMangaUpdates(q);
+        else if (provider === "jikan") items = await searchJikan(q,type);
+        else if (provider === "omdb") items = await searchOMDb(q,type);
+        else if (provider === "tvmaze") {
+          if (type !== "TV Series") throw new Error("TVmaze is a free provider for TV series only. Select TV Series as the media type.");
+          items = await searchTVMaze(q);
+        } else items = await searchAniList(q,type);
+        return items;
+      })();
+      providerInFlight.set(cacheKey,task);
     }
-    else items = await searchAniList(q,type);
+    const items=await task;
+    providerResultCache.set(cacheKey,{savedAt:Date.now(),items});
+    while(providerResultCache.size>PROVIDER_CACHE_LIMIT)providerResultCache.delete(providerResultCache.keys().next().value);
     return reply({provider,items});
   } catch (error) {
     console.error("[catalogue-search]",provider,error);
     return reply({error:provider+" search failed: "+String(error?.message || error).slice(0,220),items:[]},502);
+  } finally {
+    providerInFlight.delete(cacheKey);
+  }
   }
 }
 
