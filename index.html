@@ -1504,7 +1504,11 @@ async function fetchCataloguePage(offset=0,query=''){
    if(!response.ok)throw new Error('Public catalogue cache HTTP '+response.status);
    const payload=await response.json();
    if(!Array.isArray(payload.data))throw new Error('Public catalogue cache returned an invalid page');
-   return payload.data;
+   const rows=payload.data;
+   if(rows.length&&rows.some(row=>row.read_url===undefined)){
+    try{const ids=rows.map(row=>row.id).filter(Boolean);const links=await db.from('titles').select('id,read_url').in('id',ids);if(!links.error){const byId=new Map((links.data||[]).map(row=>[String(row.id),row.read_url]));rows.forEach(row=>{if(row.read_url===undefined)row.read_url=byId.get(String(row.id))||null})}}catch(error){console.warn('Read-link enrichment skipped:',error.message)}
+   }
+   return rows;
   }catch(error){console.warn('Cloudflare catalogue cache unavailable; using Supabase:',error.message)}
  }
  try{const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(offset,offset+CATALOGUE_PAGE_SIZE-1),'Catalogue database page',10000);if(result.error)throw result.error;return result.data||[]}catch(error){console.warn('Supabase client catalogue request failed; trying the REST range fallback:',error.message);return await fetchTitlesRestPage(offset)}
