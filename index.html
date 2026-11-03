@@ -1491,6 +1491,25 @@ async function fetchTitlesRestPage(from){
   return rows;
  }finally{clearTimeout(timer)}
 }
+async function fetchTitlesD1Page(from){
+ const base=String(cfg.cloudflareD1Url||'').replace(/\\/$/,'');
+ if(!base)return null;
+ const fetchChunk=async offset=>{
+  const url=new URL(base+'/api/titles');
+  url.searchParams.set('limit','250');
+  url.searchParams.set('offset',String(offset));
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+  try{
+   const response=await fetch(url.toString(),{headers:{Accept:'application/json'},signal:controller.signal,cache:'default'});
+   if(!response.ok)throw new Error('Cloudflare D1 HTTP '+response.status);
+   const payload=await response.json();
+   if(!Array.isArray(payload?.data))throw new Error('Cloudflare D1 returned an invalid catalogue response');
+   return payload.data;
+  }finally{clearTimeout(timer)}
+ };
+ const pages=await Promise.all([fetchChunk(from),fetchChunk(from+250)]);
+ return [...pages[0],...pages[1]];
+}
 async function loadTitles({force=false}={}){
  if(!force&&titlesLoadPromise)return titlesLoadPromise;
  if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;
@@ -1506,15 +1525,24 @@ async function loadTitles({force=false}={}){
   let publishedCount=0;
   const publish=()=>{setCatalogue(collected);publishedCount=collected.length};
   const loadPage=async from=>{
-   let rows=[],clientError=null;
+   let rows=[],primaryError=null;
+   // Public catalogue reads use the read-optimized D1 replica first.
    try{
-    const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',10000);
-    if(result.error)throw result.error;
-    rows=result.data||[];
-   }catch(error){clientError=error;console.warn('Catalogue page request failed; trying the REST fallback:',error)}
-   if(clientError||(!rows.length&&from===0)){
-    try{rows=await fetchTitlesRestPage(from);if(clientError)console.info('Catalogue page recovered through REST fallback.')}
-    catch(restError){throw new Error('Primary request: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
+    const cachedRows=await fetchTitlesD1Page(from);
+    if(Array.isArray(cachedRows))rows=cachedRows;
+   }catch(error){primaryError=error;console.warn('Cloudflare D1 catalogue unavailable; falling back to Supabase:',error)}
+   // An empty first D1 page can mean the replica has not synced yet. Never show
+   // an empty catalogue when the canonical Supabase source can still respond.
+   if(primaryError||(!rows.length&&from===0)){
+    try{
+     const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',10000);
+     if(result.error)throw result.error;
+     rows=result.data||[];
+    }catch(clientError){
+     console.warn('Supabase catalogue page failed; trying the REST fallback:',clientError);
+     try{rows=await fetchTitlesRestPage(from)}
+     catch(restError){throw new Error('D1: '+(primaryError?.message||'empty response')+'; Supabase: '+(clientError?.message||String(clientError))+'; REST fallback: '+(restError.message||String(restError)))}
+    }
    }
    return rows;
   };
