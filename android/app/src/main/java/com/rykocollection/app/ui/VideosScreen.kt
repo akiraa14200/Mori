@@ -368,6 +368,14 @@ private fun InAppWebPlayer(
                             settings.allowContentAccess = false
                             webChromeClient = WebChromeClient()
                             webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView, url: String) {
+                                    super.onPageFinished(view, url)
+                                    // The Kairo/comic player uses a plain privacy-enhanced iframe.
+                                    // Treat the local wrapper page as loaded; iframe errors/timeouts
+                                    // are handled separately rather than waiting for the IFrame API.
+                                    if (pageLoading && playerError == null) pageLoading = false
+                                }
+
                                 override fun onReceivedError(
                                     view: WebView,
                                     request: WebResourceRequest,
@@ -417,16 +425,17 @@ private fun InAppWebPlayer(
                                     <meta name="referrer" content="strict-origin-when-cross-origin">
                                     <style>
                                       html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
-                                      iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+                                      iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; }
                                     </style>
                                   </head>
                                   <body>
                                     <iframe
                                       src="https://www.youtube-nocookie.com/embed/$youtubeVideoId?rel=0&playsinline=1"
                                       title="YouTube video player"
-                                      referrerpolicy="strict-origin-when-cross-origin"
                                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                      allowfullscreen>
+                                      referrerpolicy="strict-origin-when-cross-origin"
+                                      allowfullscreen
+                                      onload="if (window.RykoBridge) RykoBridge.playerReady();">
                                     </iframe>
                                   </body>
                                 </html>
