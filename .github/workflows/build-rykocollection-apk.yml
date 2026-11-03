@@ -9,6 +9,10 @@ on:
       - "android/**"
       - ".github/workflows/build-rykocollection-apk.yml"
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
