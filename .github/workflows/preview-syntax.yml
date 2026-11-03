@@ -1,7 +1,7 @@
 name: Preview syntax check
 on:
   push:
-    branches: [remove-footer-credits, main]
+    branches: [remove-footer-credits, main, ryko-native-android]
   pull_request:
     branches: [main]
   workflow_dispatch:
