@@ -633,9 +633,18 @@ private fun videoThumbnail(video: RykoRelatedVideo): String? =
     youtubeId(video.videoUrl)?.let { "https://img.youtube.com/vi/$it/hqdefault.jpg" }
 private fun playerHtml(url: String, platform: String): String {
     val yt = youtubeId(url)
-    if (yt == null) return """<!doctype html><html><body style="margin:0;background:#101116;color:#ddd;font:14px Arial;display:grid;place-items:center;height:100vh;text-align:center">This link is not a valid embeddable YouTube video.</body></html>"""
-    val src = "https://www.youtube-nocookie.com/embed/" + yt + "?rel=0&playsinline=1&controls=1&enablejsapi=1"
-    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px}a{color:#c2adff}</style></head><body><div id="error">This video cannot be embedded.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank">Open original on YouTube</a></div><iframe id="player" src="$src" title="YouTube trailer" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid');</script></body></html>"""
+    val instagramSrc = if (yt == null && platform.equals("instagram", true)) {
+        val uri = runCatching { Uri.parse(url.trim()) }.getOrNull()
+        val host = uri?.host?.lowercase().orEmpty()
+        if ((host == "instagram.com" || host.endsWith(".instagram.com")) &&
+            uri?.pathSegments?.firstOrNull() in listOf("reel", "reels", "p", "tv"))
+            "https://www.instagram.com${uri?.path.orEmpty().trimEnd('/')}/embed/" else null
+    } else null
+    if (yt == null && instagramSrc == null) return """<!doctype html><html><body style="margin:0;background:#101116;color:#ddd;font:14px Arial;display:grid;place-items:center;height:100vh;text-align:center">This link is not supported for embedded playback.</body></html>"""
+    val src = if (yt != null) "https://www.youtube-nocookie.com/embed/" + yt + "?rel=0&playsinline=1&controls=1&enablejsapi=1" else instagramSrc!!
+    val fallback = if (yt != null) """<div id="error">This video cannot be embedded.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank">Open original on YouTube</a></div>""" else ""
+    val title = if (yt != null) "YouTube trailer" else "Instagram video"
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px}a{color:#c2adff}</style></head><body>$fallback<iframe id="player" src="$src" title="$title" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');if(e){window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid')}</script></body></html>"""
 }
 
 private class FullscreenChromeClient(private val activity: Activity) : WebChromeClient() {
