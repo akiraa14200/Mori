@@ -1386,7 +1386,71 @@ body{overflow-x:clip}
 .apple-music-admin-preview{max-width:900px;margin:14px 0}
 @media(max-width:560px){.apple-music-glass-card{grid-template-columns: minmax(88px,30%) minmax(0,1fr);gap:12px;padding:11px;border-radius:20px}.apple-music-artwork-wrap{border-radius:15px}.apple-music-player-content{gap:7px}.apple-music-topline{flex-wrap:wrap;gap:6px}.apple-music-track-index{display:none}.apple-music-link{margin-left:0;padding:5px 7px 5px 9px;font-size:10px}.apple-music-link b{width:18px;height:18px;font-size:17px}.apple-music-track-title{font-size:clamp(16px,4.5vw,22px)}.apple-music-track-artist{font-size:11px}.apple-music-preview .entry-preview-audio{margin:7px 0 1px;height:36px}.apple-music-footer{gap:5px;font-size:9px}.apple-music-footer span+span:before{margin-right:5px}}
 
-.admin-workspace-tabs{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 18px;padding:10px;border:1px solid var(--line);border-radius:16px;background:#ffffff05;position:sticky;top:72px;z-index:20;backdrop-filter:blur(18px)}.admin-workspace-tabs .btn{flex:1;min-width:140px}.admin-review-section{scroll-margin-top:100px}#admin-entry-panel,#admin-catalogue-section{scroll-margin-top:100px}@media(max-width:600px){.admin-workspace-tabs{top:60px;display:grid;grid-template-columns:1fr 1fr}.admin-workspace-tabs button:last-child{grid-column:1/-1}}</style>
+.admin-workspace-tabs{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 18px;padding:10px;border:1px solid var(--line);border-radius:16px;background:#ffffff05;position:sticky;top:72px;z-index:20;backdrop-filter:blur(18px)}.admin-workspace-tabs .btn{flex:1;min-width:140px}.admin-review-section{scroll-margin-top:100px}#admin-entry-panel,#admin-catalogue-section{scroll-margin-top:100px}@media(max-width:600px){.admin-workspace-tabs{top:60px;display:grid;grid-template-columns:1fr 1fr}.admin-workspace-tabs button:last-child{grid-column:1/-1}}
+/* Final video-card action layout: one reliable row for Read/Watch + overflow,
+   with admin-only controls on a separate row so desktop flex sizing cannot hide them. */
+.video-feed-info{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  gap:12px!important;
+  min-width:0!important;
+}
+.video-feed-copy{width:100%!important;min-width:0!important;flex:0 1 auto!important}
+.video-feed-actions{
+  display:flex!important;
+  flex-direction:row!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:8px!important;
+  width:100%!important;
+  min-width:0!important;
+  margin-top:0!important;
+}
+.video-feed-actions .video-feed-action{
+  order:1!important;
+  display:flex!important;
+  flex:1 1 calc(100% - 50px)!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  align-items:center!important;
+  justify-content:center!important;
+  white-space:nowrap!important;
+}
+.video-feed-actions .video-more-wrap{
+  order:2!important;
+  display:flex!important;
+  flex:0 0 42px!important;
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  margin:0!important;
+}
+.video-feed-actions [data-quick-edit],
+.video-feed-actions [data-remove-feed-video]{
+  order:3!important;
+  display:inline-flex!important;
+  flex:1 1 calc(50% - 4px)!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  align-items:center!important;
+  justify-content:center!important;
+  white-space:normal!important;
+}
+.video-feed-actions .video-more-btn{flex:0 0 42px!important;width:42px!important;height:42px!important}
+@media(max-width:600px){
+  .video-feed-info{display:flex!important;flex-direction:column!important;align-items:stretch!important}
+  .video-feed-actions{display:flex!important;grid-template-columns:none!important;flex-wrap:wrap!important}
+  .video-feed-actions .video-feed-action{grid-column:auto!important;flex:1 1 calc(100% - 50px)!important}
+  .video-feed-actions .video-more-wrap{grid-column:auto!important;flex:0 0 42px!important}
+  .video-feed-actions [data-quick-edit],
+  .video-feed-actions [data-remove-feed-video]{grid-column:auto!important;flex:1 1 calc(50% - 4px)!important}
+}
+</style>
 </head>
 <body>
 <header class="topbar"><div class="wrap nav"><a class="brand" href="#/">Ryko<span>Collection</span></a><nav class="navlinks"><a href="#/" data-nav-route="/" aria-label="Home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7"/><path d="M5 9v11a1 1 0 0 0 1 1h4.5v-6h3v6H18a1 1 0 0 0 1-1V9"/></svg><span>Home</span></a><a href="#/news" data-nav-route="/news" aria-label="News"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M7.5 8h4v4h-4zM14.5 8h2M14.5 11h2M7.5 15.5h9M7.5 18h9"/></svg><span>News <i class="nav-live-dot"></i></span></a><a href="#/browse" data-nav-route="/browse" aria-label="Browse"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7"/><path d="m15.7 15.7 4.5 4.5M8.2 13l2-4.8 4.8-2-2 4.8-4.8 2Z"/></svg><span>Browse</span></a><a href="#/videos" data-nav-route="/videos" aria-label="Videos"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg><span>Videos</span></a><a href="#/library" data-nav-route="/library" aria-label="My library"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4h11a1.5 1.5 0 0 1 1.5 1.5V21l-7-4-7 4V5.5A1.5 1.5 0 0 1 6.5 4Z"/><path d="M9 7.5h6"/></svg><span>My library</span></a></nav><div class="navright"><div class="global-search-wrap"><input id="global-search" class="search" placeholder="Search titles…" aria-label="Search titles" autocomplete="off" aria-controls="search-suggestions" aria-expanded="false"><div id="search-suggestions" class="search-suggestions hidden" role="listbox" aria-label="Title suggestions"></div></div><div class="header-reader-tools"><button class="icon-btn" id="notifications-btn" aria-label="Notifications" title="Notifications"><svg class="header-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M9.5 21h5"/></svg><span id="notification-badge" class="notification-badge hidden">0</span></button><button class="header-avatar-btn" id="account-btn" aria-label="Account" title="Account"><span class="avatar-signin-fallback">Sign in</span></button></div></div></div></header>
