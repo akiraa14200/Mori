@@ -52,6 +52,7 @@ private fun RykoApp(api: Backend) {
     var tab by remember { mutableStateOf("Home") }
     var mediaMode by remember { mutableStateOf("Anime") }
     var titles by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
+    var relatedVideos by remember { mutableStateOf<List<RykoRelatedVideo>>(emptyList()) }
     var library by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
     var selected by remember { mutableStateOf<RykoTitle?>(null) }
     var search by remember { mutableStateOf("") }
@@ -70,6 +71,7 @@ private fun RykoApp(api: Backend) {
             error = ""
             try {
                 titles = api.loadTitles(search)
+                relatedVideos = api.loadRelatedVideos()
                 if (api.signedIn) {
                     library = api.loadLibrary()
                     isAdmin = api.isAdmin()
@@ -200,20 +202,41 @@ private fun RykoApp(api: Backend) {
                             }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
                         }
                     }
-                    "Video" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    "Video" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         item {
-                            Text("VIDEO", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                            Text("Trailers & previews", color = White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Discover video previews for titles in the Ryko catalogue.", color = Muted, fontSize = 13.sp)
+                            Text("RYKO VIDEO FEED", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                            Text("Clips from your entries.", color = White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("YouTube and Instagram videos added to each title appear here automatically.", color = Muted, fontSize = 13.sp)
+                            Spacer(Modifier.height(4.dp))
+                            Text("${relatedVideos.size} videos", color = Gold, fontSize = 12.sp)
                         }
-                        items(titles) { title ->
-                            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    if (title.cover.isNotBlank()) AsyncImage(model = title.cover, contentDescription = title.name, modifier = Modifier.width(76.dp).height(96.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(title.name, color = White, fontWeight = FontWeight.Bold)
-                                        Text("Official trailer search", color = Muted, fontSize = 11.sp)
-                                        TextButton(onClick = { openVideo(title.name) }) { Text("Find video ▶", color = Gold) }
+                        if (relatedVideos.isEmpty()) {
+                            item { EmptyState("No videos added yet", "When you add a YouTube or Instagram video to an entry on Ryko Collection, it will show up here.") {} }
+                        } else {
+                            items(relatedVideos, key = { it.id }) { video ->
+                                val parent = titles.firstOrNull { it.id == video.titleId }
+                                Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier.fillMaxWidth().clickable { openVideoUrl(video.videoUrl) }) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            if (parent?.cover?.isNotBlank() == true) AsyncImage(model = parent.cover, contentDescription = parent.name,
+                                                modifier = Modifier.size(width = 62.dp, height = 76.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(parent?.name ?: "Ryko entry", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text(video.videoTitle.ifBlank { if (video.platform == "instagram") "Instagram video" else "YouTube video" },
+                                                    color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                Text(if (video.creatorName.isNotBlank()) video.creatorName else video.platform.replaceFirstChar { it.uppercase() },
+                                                    color = Muted, fontSize = 12.sp)
+                                            }
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            AssistChip(onClick = { openVideoUrl(video.videoUrl) },
+                                                label = { Text(if (video.platform == "instagram") "Instagram" else "YouTube") },
+                                                leadingIcon = { Icon(Icons.Default.PlayCircle, null) })
+                                            if (video.actionUrl.isNotBlank()) TextButton(onClick = { openVideoUrl(video.actionUrl) }) {
+                                                Text(if (video.actionType == "read") "Open entry link" else "Watch video", color = Gold)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -423,3 +446,5 @@ private fun EmptyState(title: String, subtitle: String, action: () -> Unit) {
 
 private fun openVideo(title: String) { val c = RykoAppContext.current ?: return; val u = "https://www.youtube.com/results?search_query=" + Uri.encode("$title official trailer"); c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }
 private object RykoAppContext { var current: android.content.Context? = null }
+
+private fun openVideoUrl(url: String) { val c = RykoAppContext.current ?: return; if (url.startsWith("https://") || url.startsWith("http://")) c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
