@@ -1785,28 +1785,51 @@ async function openTitle(id){closeEntryMusic();const t=state.titles.find(x=>x.id
 function bindEntryCharacterSearch(){const panel=document.querySelector('#tab-characters');if(!panel)return;const input=panel.querySelector('[data-character-search]');if(!input)return;const cards=[...panel.querySelectorAll('#entry-character-grid .character')];const count=panel.querySelector('[data-character-count]');const empty=panel.querySelector('[data-character-empty]');const update=()=>{const query=String(input.value||'').trim().toLowerCase();let visible=0;cards.forEach(card=>{const searchable=(card.textContent||card.dataset.characterSearchText||'').toLowerCase();const match=!query||searchable.includes(query);card.style.display=match?'':'none';card.setAttribute('aria-hidden',String(!match));if(match)visible++});if(count)count.textContent=query?visible+' of '+cards.length+' characters':cards.length+' characters';if(empty)empty.style.display=visible===0?'':'none'};input.oninput=update;input.onsearch=update;input.onchange=update;update()}
 function trailerEmbedUrl(url){try{const u=new URL(String(url).trim());const rawHost=u.hostname.toLowerCase();const host=rawHost.startsWith('www.')?rawHost.slice(4):rawHost;const parts=u.pathname.split('/').filter(Boolean);let id='';if(host==='youtu.be'){id=parts[0]||'';return id?'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id):''}if(['youtube.com','m.youtube.com','youtube-nocookie.com'].includes(host)){if(u.pathname==='/watch')id=u.searchParams.get('v')||'';else if(['embed','shorts','live'].includes(parts[0]))id=parts[1]||'';return id?'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id):''}if(host==='dailymotion.com'){id=parts[0]==='video'?(parts[1]||'').split('_')[0]:'';return id?'https://www.dailymotion.com/embed/video/'+encodeURIComponent(id):''}if(host==='dai.ly'){id=parts[0]||'';return id?'https://www.dailymotion.com/embed/video/'+encodeURIComponent(id):''}if(['instagram.com','m.instagram.com'].includes(host)){const type=parts[0],code=parts[1];if(['reel','reels','p','tv'].includes(type)&&code)return 'https://www.instagram.com/'+type+'/'+encodeURIComponent(code)+'/embed/'}if(host==='tiktok.com'||host==='m.tiktok.com'){const at=parts.findIndex(x=>x.startsWith('@'));id=at>=0&&parts[at+1]==='video'?parts[at+2]||'':'';if(id&&/^\\d+$/.test(id))return 'https://www.tiktok.com/embed/v2/'+id}}catch(error){}return ''}
 let relatedVideoMapCache=null,relatedVideoMapCacheAt=0,relatedVideoMapRequest=null;
+function relatedVideoPlatform(url){const host=new URL(url).hostname.toLowerCase();if(host.includes('instagram'))return 'instagram';if(host.includes('dailymotion')||host==='dai.ly')return 'dailymotion';if(host.includes('tiktok'))return 'tiktok';return 'youtube'}
+function isMissingRelatedVideosTable(error){return ['42P01','PGRST205','PGRST204'].includes(String(error?.code||''))||/related_videos.*(not found|does not exist)|could not find the table/i.test(String(error?.message||''))}
 async function getRelatedVideoMap({force=false}={}){
- if(!force&&relatedVideoMapCache&&Date.now()-relatedVideoMapCacheAt<60000)return relatedVideoMapCache;
+ if(!force&&relatedVideoMapCache&&Date.now()-relatedVideoMapCacheAt<30000)return relatedVideoMapCache;
  if(relatedVideoMapRequest)return relatedVideoMapRequest;
  relatedVideoMapRequest=(async()=>{
-  const {data,error}=await db.from('site_settings').select('value').eq('key','related_videos_by_title').maybeSingle();
-  if(error)throw error;
-  relatedVideoMapCache=data?.value&&typeof data.value==='object'&&!Array.isArray(data.value)?data.value:{};
+  const {data,error}=await db.from('related_videos').select('title_id,video_url,sort_order').not('title_id','is',null).order('sort_order',{ascending:true});
+  if(error){
+   if(!isMissingRelatedVideosTable(error))throw error;
+   const legacy=await db.from('site_settings').select('value').eq('key','related_videos_by_title').maybeSingle();
+   if(legacy.error)throw legacy.error;
+   relatedVideoMapCache=legacy.data?.value&&typeof legacy.data.value==='object'&&!Array.isArray(legacy.data.value)?legacy.data.value:{};
+  }else{
+   relatedVideoMapCache={};
+   (data||[]).forEach(row=>{const key=String(row.title_id);(relatedVideoMapCache[key] ||= []).push(row.video_url)});
+  }
   relatedVideoMapCacheAt=Date.now();
   return relatedVideoMapCache;
  })().finally(()=>{relatedVideoMapRequest=null});
  return relatedVideoMapRequest;
 }
+async function getRelatedVideosForTitle(id){
+ const {data,error}=await db.from('related_videos').select('*').eq('title_id',id).order('sort_order',{ascending:true}).order('created_at',{ascending:true});
+ if(error){
+  if(!isMissingRelatedVideosTable(error))throw error;
+  const map=await getRelatedVideoMap();
+  return (map[String(id)]||[]).map((url,index)=>({id:'legacy-'+index,title_id:id,video_url:url,sort_order:index}));
+ }
+ return data||[];
+}
 async function saveRelatedVideosForTitle(id,urls){
  if(!id)throw new Error('Save the entry before adding related videos.');
- const current={...(await getRelatedVideoMap())};
- if(urls.length)current[String(id)]=urls;else delete current[String(id)];
- const result=await db.from('site_settings').upsert({key:'related_videos_by_title',value:current},{onConflict:'key'});
- if(result.error)throw result.error;
- relatedVideoMapCache=current;
- relatedVideoMapCacheAt=Date.now();
+ const clean=[...new Set((urls||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+ for(const url of clean){if(!trailerEmbedUrl(url))throw new Error('Related video links must be valid supported video URLs: '+url)}
+ const {data:existing,error:readError}=await db.from('related_videos').select('*').eq('title_id',id);
+ if(readError)throw readError;
+ const previous=existing||[],byUrl=new Map(previous.map(row=>[row.video_url,row]));
+ const title=state.titles.find(t=>String(t.id)===String(id));
+ const rows=clean.map((url,index)=>{const old=byUrl.get(url)||{};return {...old,title_id:id,legacy_title_id:null,video_url:url,platform:relatedVideoPlatform(url),sort_order:index,action_type:old.action_type||(title?.read_url?'read':'watch'),action_url:old.action_url||(title?.read_url||url),updated_at:new Date().toISOString()}});
+ if(rows.length){const {error}=await db.from('related_videos').upsert(rows,{onConflict:'title_id,video_url'});if(error)throw error}
+ const removed=previous.filter(row=>!clean.includes(row.video_url)).map(row=>row.id).filter(Boolean);
+ if(removed.length){const {error}=await db.from('related_videos').delete().in('id',removed);if(error)throw error}
+ relatedVideoMapCache=null;relatedVideoMapCacheAt=0;
 }
-async function loadEntryRelatedVideos(t){await new Promise(resolve=>requestAnimationFrame(resolve));if(state.selected?.id!==t.id||state.route!=='/title/'+t.id)return;const box=document.getElementById('entry-related-videos');if(!box)return;box.innerHTML='';try{const map=await getRelatedVideoMap();if(state.selected?.id!==t.id||state.route!=='/title/'+t.id)return;const urls=(map[String(t.id)]||[]).filter(url=>typeof url==='string');const videos=urls.map((url,i)=>({url,embed:trailerEmbedUrl(url),index:i})).filter(v=>v.embed);if(!videos.length)return;box.innerHTML='<section class="entry-related-section" aria-label="Related videos"><div class="entry-related-heading"><div><div class="eyebrow">WATCH MORE</div><h2>Related videos</h2><p class="muted small">More clips and moments connected to this title.</p></div><span class="entry-related-count">'+videos.length+' '+(videos.length===1?'VIDEO':'VIDEOS')+'</span></div><div class="related-video-grid">'+videos.map(v=>'<article class="related-video-card"><div class="related-video-thumb">'+singleVideoPlaceholder(v.embed,titleName(t)+' related video '+(v.index+1),'',t.cover_url)+'</div><div class="related-video-card-meta"><span>RELATED CLIP</span><strong>'+esc(titleName(t))+'</strong></div></article>').join('')+'</div></section>'}catch(error){console.warn('Related videos unavailable:',error.message)}}
+async function loadEntryRelatedVideos(t){await new Promise(resolve=>requestAnimationFrame(resolve));if(state.selected?.id!==t.id||state.route!=='/title/'+t.id)return;const box=document.getElementById('entry-related-videos');if(!box)return;box.innerHTML='';try{const rows=await getRelatedVideosForTitle(t.id);if(state.selected?.id!==t.id||state.route!=='/title/'+t.id)return;const videos=rows.map((row,index)=>({url:row.video_url,embed:trailerEmbedUrl(row.video_url),index})).filter(v=>v.embed);if(!videos.length)return;box.innerHTML='<section class="entry-related-section" aria-label="Related videos"><div class="entry-related-heading"><div><div class="eyebrow">WATCH MORE</div><h2>Related videos</h2><p class="muted small">More clips and moments connected to this title.</p></div><span class="entry-related-count">'+videos.length+' '+(videos.length===1?'VIDEO':'VIDEOS')+'</span></div><div class="related-video-grid">'+videos.map(v=>'<article class="related-video-card"><div class="related-video-thumb">'+singleVideoPlaceholder(v.embed,titleName(t)+' related video '+(v.index+1),'',t.cover_url)+'</div><div class="related-video-card-meta"><span>RELATED CLIP</span><strong>'+esc(titleName(t))+'</strong></div></article>').join('')+'</div></section>'}catch(error){console.warn('Related videos unavailable:',error.message)}}
 async function loadEntryTrailer(t){const box=document.getElementById('entry-trailer');if(!box)return;box.innerHTML='';const showTrailer=url=>{const embed=trailerEmbedUrl(url);if(!embed)return false;const current=document.getElementById('entry-trailer');if(!current||state.selected?.id!==t.id)return false;current.innerHTML='<div style="margin-top:24px"><h3 style="font-size:17px;margin:0 0 12px">Trailer</h3><div style="position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:15px;border:1px solid var(--line);background:#08080b">'+singleVideoPlaceholder(embed,titleName(t)+' trailer','Play trailer',t.cover_url)+'</div></div>';return true};if(t?.trailer_url&&showTrailer(t.trailer_url))return;if(!t?.anilist_id)return;try{const query='query ($id:Int){Media(id:$id){trailer{id site}}}';const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables:{id:Number(t.anilist_id)}})});if(!res.ok)return;const json=await res.json();const trailer=json.data?.Media?.trailer;if(!trailer?.id)return;const site=String(trailer.site||'').toLowerCase();const trailerUrl=site==='youtube'?'https://www.youtube.com/watch?v='+trailer.id:site==='dailymotion'?'https://www.dailymotion.com/video/'+trailer.id:'';if(trailerUrl)showTrailer(trailerUrl)}catch(error){console.warn('Trailer lookup failed',error)}}
 const entryExtrasRequests=new Map();
 function characterRolePriority(c){const role=String(c?.role||c?.character_role||c?.type||c?.importance||'').toLowerCase().replace(/[_-]+/g,' ');if(c?.is_main===true||c?.is_protagonist===true||c?.main_character===true||c?.protagonist===true||['main','mc','lead','protagonist'].includes(role))return 0;if(/main character|protagonist|main lead|lead character|primary character|heroine|hero\b|deuteragonist/.test(role))return 0;if(/supporting|secondary|side character|minor|background|antagonist|villain/.test(role))return 2;return 1}
