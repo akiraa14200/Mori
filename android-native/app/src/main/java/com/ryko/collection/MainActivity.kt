@@ -1,6 +1,10 @@
 package com.ryko.collection
 
 import android.os.Bundle
+import android.app.Activity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
@@ -306,6 +310,8 @@ private fun RykoApp(api: Backend) {
 
         playingVideo?.let { video ->
             Dialog(onDismissRequest = { playingVideo = null }) {
+                var fullscreenChrome by remember { mutableStateOf<FullscreenChromeClient?>(null) }
+                BackHandler(enabled = fullscreenChrome?.isFullscreen == true) { fullscreenChrome?.hideCustomView() }
                 Column(Modifier.fillMaxWidth().background(Color(0xFF090B10), RoundedCornerShape(18.dp)).padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(video.videoTitle.ifBlank { "Ryko video" }, color = White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -317,11 +323,24 @@ private fun RykoApp(api: Backend) {
                             settings.domStorageEnabled = true
                             settings.mediaPlaybackRequiresUserGesture = true
                             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                            webChromeClient = WebChromeClient()
+                            settings.useWideViewPort = true
+                            settings.loadWithOverviewMode = true
+                            settings.builtInZoomControls = false
+                            settings.displayZoomControls = false
+                            webViewClient = WebViewClient()
+                            val chrome = FullscreenChromeClient(context as Activity)
+                            fullscreenChrome = chrome
+                            webChromeClient = chrome
                             setBackgroundColor(android.graphics.Color.BLACK)
                             loadDataWithBaseURL("https://www.youtube-nocookie.com", playerHtml(video.videoUrl, video.platform), "text/html", "UTF-8", null)
                         }
-                    }, modifier = Modifier.fillMaxWidth().height(240.dp))
+                    }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), onRelease = { web ->
+                        fullscreenChrome?.hideCustomView()
+                        web.stopLoading()
+                        web.loadUrl("about:blank")
+                        web.destroy()
+                        fullscreenChrome = null
+                    })
                     Text(video.platform.replaceFirstChar { it.uppercase() } + " • Plays inside Ryko", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(8.dp))
                 }
             }
@@ -616,4 +635,33 @@ private fun playerHtml(url: String, platform: String): String {
     if (yt == null) return """<!doctype html><html><body style="margin:0;background:#101116;color:#ddd;font:14px Arial;display:grid;place-items:center;height:100vh;text-align:center">This link is not a valid embeddable YouTube video.</body></html>"""
     val src = "https://www.youtube-nocookie.com/embed/" + yt + "?rel=0&playsinline=1&controls=1&enablejsapi=1"
     return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px}a{color:#c2adff}</style></head><body><div id="error">This video cannot be embedded.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank">Open original on YouTube</a></div><iframe id="player" src="$src" title="YouTube trailer" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid');</script></body></html>"""
+}
+
+private class FullscreenChromeClient(private val activity: Activity) : WebChromeClient() {
+    private var customView: View? = null
+    private var customCallback: CustomViewCallback? = null
+    val isFullscreen: Boolean get() = customView != null
+
+    override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+        if (customView != null) { callback.onCustomViewHidden(); return }
+        customView = view
+        customCallback = callback
+        (activity.window.decorView as? ViewGroup)?.addView(
+            view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        activity.window.decorView.systemUiVisibility =
+            (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
+    }
+
+    override fun onHideCustomView() { hideCustomView() }
+
+    fun hideCustomView() {
+        val view = customView ?: return
+        (activity.window.decorView as? ViewGroup)?.removeView(view)
+        customView = null
+        customCallback?.onCustomViewHidden()
+        customCallback = null
+        activity.window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
 }
