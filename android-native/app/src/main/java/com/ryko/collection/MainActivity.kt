@@ -108,16 +108,18 @@ private fun RykoApp(api: Backend) {
             },
             bottomBar = {
                 NavigationBar(containerColor = Panel, contentColor = Gold) {
-                    listOf("Home", "Search", "Library", "Profile").forEach { item ->
+                    listOf("Home", "Browse", "Video", "Library", "Account").forEach { item ->
                         NavigationBarItem(
                             selected = tab == item,
-                            onClick = { tab = item; if (item == "Library" || item == "Home") refresh() },
+                            onClick = { tab = item; if (item == "Library" || item == "Home" || item == "Video") refresh() },
                             icon = {
                                 Icon(when (item) {
                                     "Home" -> Icons.Default.Home
-                                    "Search" -> Icons.Default.Search
+                                    "Browse" -> Icons.Default.Explore
+                                    "Video" -> Icons.Default.PlayCircle
                                     "Library" -> Icons.Default.Bookmarks
-                                    else -> Icons.Default.Person
+                                    "Account" -> Icons.Default.Person
+                                    else -> Icons.Default.Home
                                 }, contentDescription = item)
                             },
                             label = { Text(item, fontSize = 10.sp) },
@@ -133,7 +135,7 @@ private fun RykoApp(api: Backend) {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (tab) {
-                    "Search" -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    "Browse" -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                         OutlinedTextField(
                             value = search, onValueChange = { search = it },
                             modifier = Modifier.fillMaxWidth(),
@@ -164,7 +166,7 @@ private fun RykoApp(api: Backend) {
                         else Catalogue(library, busy, error, { selected = it },
                             empty = "No saved titles yet. Open a title and tap Add to library.")
                     }
-                    "Profile" -> {
+                    "Account" -> {
                         if (!api.signedIn) EmptyState(
                             "Welcome to Ryko",
                             "Sign in or create an account to sync your library, profile and community activity."
@@ -207,7 +209,7 @@ private fun RykoApp(api: Backend) {
                                     Text("Stories worth\nkeeping close.", color = White, fontSize = 28.sp, lineHeight = 33.sp, fontWeight = FontWeight.ExtraBold)
                                     Text("Explore anime, manga, manhwa and more.", color = Muted, fontSize = 13.sp)
                                     Spacer(Modifier.height(14.dp))
-                                    Button(onClick = { tab = "Search" },
+                                    Button(onClick = { tab = "Browse" },
                                         colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) {
                                         Text("Explore catalogue")
                                     }
@@ -218,7 +220,7 @@ private fun RykoApp(api: Backend) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Popular in Ryko", color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.weight(1f))
-                                TextButton(onClick = { tab = "Search" }) { Text("See all", color = Gold) }
+                                TextButton(onClick = { tab = "Browse" }) { Text("See all", color = Gold) }
                             }
                         }
                         items(titles) { title -> TitleCard(title, { selected = title }, Modifier.fillMaxWidth()) }
@@ -255,7 +257,7 @@ private fun RykoApp(api: Backend) {
                             if (api.signedIn) {
                                 showAuth = false
                                 refresh()
-                                tab = "Profile"
+                                tab = "Account"
                             } else {
                                 error = "Check your email to confirm your account, then sign in."
                             }
