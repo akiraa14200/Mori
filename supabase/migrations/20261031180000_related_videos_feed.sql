@@ -76,17 +76,18 @@ begin
   if settings_value is null or jsonb_typeof(settings_value) <> 'object' then return; end if;
   for title_key, video_value in select key, value from jsonb_each(settings_value) loop
     if jsonb_typeof(video_value) <> 'array' then continue; end if;
-    for video_url in select jsonb_array_elements_text(video_value) loop
+    for v_url in select jsonb_array_elements_text(video_value) loop
       platform_value := case
-        when video_url ~* '(instagram\.com|instagr\.am)' then 'instagram'
-        when video_url ~* '(dailymotion\.com|dai\.ly)' then 'dailymotion'
+        when v_url ~* '(instagram\\.com|instagr\\.am)' then 'instagram'
+        when v_url ~* '(dailymotion\\.com|dai\\.ly)' then 'dailymotion'
+        when v_url ~* 'tiktok\\.com' then 'tiktok'
         else 'youtube'
       end;
       insert into public.related_videos (title_id, video_url, platform, action_type, action_url)
-      select t.id, video_url, platform_value, case when coalesce(t.read_url,'') <> '' then 'read' else 'watch' end, coalesce(nullif(t.read_url,''), video_url)
+      select t.id, v_url, platform_value, case when coalesce(t.read_url,'') <> '' then 'read' else 'watch' end, coalesce(nullif(t.read_url,''), v_url)
       from public.titles t
       where t.id::text = title_key
-        and not exists (select 1 from public.related_videos rv where rv.title_id=t.id and rv.video_url=video_url);
+      on conflict (title_id, video_url) do nothing;
     end loop;
   end loop;
 end $$;
