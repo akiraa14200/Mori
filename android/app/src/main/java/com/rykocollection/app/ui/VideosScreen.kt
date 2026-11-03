@@ -1,5 +1,10 @@
 package com.rykocollection.app.ui
 
+import android.graphics.Color as AndroidColor
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,12 +18,6 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,13 +32,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.rykocollection.app.data.VideoRepository
 import com.rykocollection.app.model.RelatedVideo
 import com.rykocollection.app.video.VideoLinkParser
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.delay
+
 
 @Composable
 fun VideosScreen() {
@@ -287,17 +289,38 @@ private fun InAppWebPlayer(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var playerView by remember { mutableStateOf<YouTubePlayerView?>(null) }
-    var youTubePlayer by remember { mutableStateOf<YouTubePlayer?>(null) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var pageLoading by remember(youtubeVideoId) { mutableStateOf(true) }
     var playerError by remember(youtubeVideoId) { mutableStateOf<String?>(null) }
-    var playerReady by remember(youtubeVideoId) { mutableStateOf(false) }
 
-    LaunchedEffect(youtubeVideoId, playerReady) {
-        if (youtubeVideoId != null && !playerReady) {
-            delay(15_000)
-            if (!playerReady && playerError == null) {
-                playerError = "YouTube player did not respond. Check your connection and try again."
+    LaunchedEffect(youtubeVideoId, pageLoading) {
+        if (youtubeVideoId != null && pageLoading) {
+            delay(20_000)
+            if (pageLoading && playerError == null) {
+                pageLoading = false
+                playerError = "The embedded player did not load. Check your connection and try again."
             }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, webView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> webView?.onResume()
+                Lifecycle.Event.ON_PAUSE -> webView?.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            webView?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                removeAllViews()
+                destroy()
+            }
+            webView = null
         }
     }
 
@@ -308,7 +331,7 @@ private fun InAppWebPlayer(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "This video link is not a supported YouTube URL.",
+                    "This entry does not contain a valid YouTube video link.",
                     color = Color(0xFFB8B8BE),
                     modifier = Modifier.padding(18.dp)
                 )
@@ -318,53 +341,99 @@ private fun InAppWebPlayer(
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { viewContext ->
-                    YouTubePlayerView(viewContext).apply {
-                        enableAutomaticInitialization = false
-                        lifecycleOwner.lifecycle.addObserver(this)
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { viewContext ->
+                        WebView(viewContext).apply {
+                            setBackgroundColor(AndroidColor.BLACK)
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.loadsImagesAutomatically = true
+                            settings.mediaPlaybackRequiresUserGesture = true
+                            settings.javaScriptCanOpenWindowsAutomatically = false
+                            settings.setSupportMultipleWindows(false)
+                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
-                        val options = IFramePlayerOptions.Builder(viewContext)
-                            .controls(1)
-                            .fullscreen(0)
-                            .autoplay(0)
-                            .build()
-
-                        initialize(
-                            object : AbstractYouTubePlayerListener() {
-                                override fun onReady(player: YouTubePlayer) {
-                                    youTubePlayer = player
-                                    playerReady = true
-                                    playerError = null
-                                    // Cue first. The user starts playback with the official
-                                    // YouTube controls, avoiding blocked WebView autoplay.
-                                    player.cueVideo(youtubeVideoId, 0f)
+                            webChromeClient = WebChromeClient()
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView, url: String) {
+                                    pageLoading = false
                                 }
 
-                                override fun onError(
-                                    player: YouTubePlayer,
-                                    error: PlayerConstants.PlayerError
+                                override fun onReceivedError(
+                                    view: WebView,
+                                    request: WebResourceRequest,
+                                    error: android.webkit.WebResourceError
                                 ) {
-                                    playerError = when (error) {
-                                        PlayerConstants.PlayerError.VIDEO_NOT_FOUND ->
-                                            "This video could not be found."
-                                        PlayerConstants.PlayerError.VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER ->
-                                            "The video owner does not allow in-app playback."
-                                        else -> "YouTube player error: $error"
+                                    if (request.isForMainFrame) {
+                                        pageLoading = false
+                                        playerError = "Player page failed to load: ${error.description}"
                                     }
                                 }
-                            },
-                            options
-                        )
-                        playerView = this
-                    }
-                },
-                update = { }
-            )
-            if (!playerReady && playerError == null) {
-                CircularProgressIndicator(color = Color(0xFFE8C547), strokeWidth = 2.dp)
-            }
+
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView,
+                                    request: WebResourceRequest
+                                ): Boolean {
+                                    // Never hand playback to the YouTube app or browser.
+                                    // Keep navigation in this embedded WebView.
+                                    return false
+                                }
+
+                                override fun onRenderProcessGone(
+                                    view: WebView,
+                                    detail: android.webkit.RenderProcessGoneDetail
+                                ): Boolean {
+                                    pageLoading = false
+                                    playerError = "The video player stopped unexpectedly. Close it and try again."
+                                    return true
+                                }
+                            }
+
+                            val html = """
+                                <!doctype html>
+                                <html>
+                                  <head>
+                                    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                                    <meta name="referrer" content="strict-origin-when-cross-origin">
+                                    <style>
+                                      html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
+                                      #player { position:absolute; inset:0; width:100%; height:100%; }
+                                      iframe { width:100%; height:100%; border:0; }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <div id="player">
+                                      <iframe
+                                        src="https://www.youtube-nocookie.com/embed/$youtubeVideoId?playsinline=1&autoplay=0&controls=1&rel=0&enablejsapi=1&origin=https%3A%2F%2Frykocollection.vercel.app"
+                                        title="RykoCollection video player"
+                                        referrerpolicy="strict-origin-when-cross-origin"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowfullscreen>
+                                      </iframe>
+                                    </div>
+                                  </body>
+                                </html>
+                            """.trimIndent()
+
+                            // A real HTTPS base URL is essential: YouTube requires an
+                            // HTTP Referer/API-client identity for embedded playback.
+                            loadDataWithBaseURL(
+                                "https://rykocollection.vercel.app/",
+                                html,
+                                "text/html",
+                                "UTF-8",
+                                null
+                            )
+                            webView = this
+                        }
+                    },
+                    update = { }
+                )
+
+                if (pageLoading && playerError == null) {
+                    CircularProgressIndicator(color = Color(0xFFE8C547), strokeWidth = 2.dp)
+                }
             }
 
             playerError?.let { message ->
@@ -375,17 +444,6 @@ private fun InAppWebPlayer(
                     fontSize = 12.sp
                 )
             }
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, playerView) {
-        onDispose {
-            playerView?.let { view ->
-                lifecycleOwner.lifecycle.removeObserver(view)
-                view.release()
-            }
-            playerView = null
-            youTubePlayer = null
         }
     }
 }
