@@ -94,7 +94,203 @@ class Backend(context: Context) {
     }
 
     suspend fun loadAniListTrailer(anilistId: Int): String? = withContext(Dispatchers.IO) {
-        val query = """query ($id:Int){Media(id:$id,type:ANIME){trailer{id site}}}"""
+        val query = """query (${'
+        val payload = JSONObject().put("query", query).put("variables", JSONObject().put("id", anilistId))
+        val request = Request.Builder().url("https://graphql.anilist.co")
+            .post(payload.toString().toRequestBody(JSON))
+            .addHeader("Content-Type", "application/json").addHeader("Accept", "application/json").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val trailer = JSONObject(response.body?.string().orEmpty()).optJSONObject("data")
+                ?.optJSONObject("Media")?.optJSONObject("trailer") ?: return@withContext null
+            if (!trailer.optString("site").equals("youtube", true)) return@withContext null
+            val id = trailer.optString("id")
+            if (!id.matches(Regex("^[A-Za-z0-9_-]{11}$"))) return@withContext null
+            "https://www.youtube.com/watch?v=$id"
+        }
+    }
+
+    suspend fun loadCharacters(titleId: String): List<RykoCharacter> {
+        val raw = request("/rest/v1/characters?select=id,title_id,name,role,description,image_url&title_id=eq.$titleId&order=name.asc", auth = false)
+        val arr = JSONArray(raw)
+        return (0 until arr.length()).map { i -> arr.getJSONObject(i).let { c ->
+            RykoCharacter(c.optString("id"), c.optString("title_id"), c.optString("name"),
+                c.optString("role"), c.optString("description"), c.optString("image_url"))
+        } }
+    }
+
+    suspend fun signIn(mail: String, password: String) {
+        val result = JSONObject(request("/auth/v1/token?grant_type=password", "POST",
+            JSONObject().put("email", mail.trim()).put("password", password), auth = false))
+        saveSession(result, mail)
+    }
+    suspend fun signUp(mail: String, password: String) {
+        val result = JSONObject(request("/auth/v1/signup", "POST",
+            JSONObject().put("email", mail.trim()).put("password", password), auth = false))
+        if (result.has("access_token")) saveSession(result, mail)
+    }
+    private fun saveSession(result: JSONObject, mail: String) {
+        val user = result.optJSONObject("user") ?: JSONObject()
+        prefs.edit().putString("access_token", result.optString("access_token"))
+            .putString("refresh_token", result.optString("refresh_token"))
+            .putString("user_id", user.optString("id"))
+            .putString("email", user.optString("email", mail)).apply()
+    }
+    fun signOut() { prefs.edit().clear().apply() }
+
+    suspend fun loadLibrary(): List<RykoTitle> {
+        val uid = userId ?: return emptyList()
+        val raw = request("/rest/v1/user_library?select=title_id&user_id=eq.$uid&limit=300")
+        val ids = JSONArray(raw)
+        if (ids.length() == 0) return emptyList()
+        val joined = (0 until ids.length()).map { ids.getJSONObject(it).getString("title_id") }
+            .joinToString(",") { "\"$it\"" }
+        val titles = request("/rest/v1/titles?select=id,name,anilist_id,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&id=in.${enc("($joined)")}&order=popularity.desc")
+        val arr = JSONArray(titles)
+        return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
+    }
+    suspend fun saveToLibrary(titleId: String) {
+        val uid = userId ?: error("Sign in to save titles")
+        request("/rest/v1/user_library", "POST", JSONObject().put("user_id", uid).put("title_id", titleId),
+            extraHeaders = mapOf("Prefer" to "resolution=ignore-duplicates,return=minimal"))
+    }
+    suspend fun removeFromLibrary(titleId: String) {
+        val uid = userId ?: error("Sign in to edit your library")
+        request("/rest/v1/user_library?user_id=eq.$uid&title_id=eq.$titleId", "DELETE")
+    }
+    suspend fun profile(): JSONObject {
+        val uid = userId ?: error("Sign in first")
+        val result = JSONArray(request("/rest/v1/profiles?select=username,display_name,avatar_url,bio&id=eq.$uid&limit=1"))
+        return if (result.length() > 0) result.getJSONObject(0) else JSONObject()
+    }
+    suspend fun comments(titleId: String): JSONArray =
+        JSONArray(request("/rest/v1/community_comments?select=id,user_id,body,created_at&title_id=eq.$titleId&order=created_at.desc&limit=30", auth = false))
+    suspend fun postComment(titleId: String, body: String) {
+        val uid = userId ?: error("Sign in to comment")
+        request("/rest/v1/community_comments", "POST",
+            JSONObject().put("title_id", titleId).put("user_id", uid).put("body", body.trim()))
+    }
+    suspend fun isAdmin(): Boolean {
+        val uid = userId ?: return false
+        return JSONArray(request("/rest/v1/admin_users?select=user_id&user_id=eq.$uid&limit=1")).length() > 0
+    }
+    private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
+    private fun JSONObject.toTitle() = RykoTitle(
+        id = optString("id"), name = optString("name"), type = optString("media_type"),
+        synopsis = optString("synopsis"), cover = optString("cover_url"),
+        genres = optJSONArray("genres").toStringList(), status = optString("status"),
+        year = if (isNull("release_year")) null else optInt("release_year"),
+        rating = if (isNull("rating")) null else optString("rating"), popularity = optInt("popularity"),
+        alternativeNames = optJSONArray("alternative_names").toStringList(), themes = optJSONArray("themes").toStringList(),
+        chapters = optString("chapters"), episodes = optString("episodes"), author = optString("author"),
+        artist = optString("artist"), studio = optString("studio"), country = optString("country"),
+        trailerUrl = optString("trailer_url"), banner = optString("banner_url"), season = optString("season"),
+        sourceUrl = optString("source_url"), featured = optBoolean("is_featured"), trending = optBoolean("is_trending"), anilistId = if (isNull("anilist_id")) null else optInt("anilist_id")
+    )
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        return (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
+    }
+}
+}id:Int){Media(id:${'
+        val payload = JSONObject().put("query", query).put("variables", JSONObject().put("id", anilistId))
+        val request = Request.Builder().url("https://graphql.anilist.co")
+            .post(payload.toString().toRequestBody(JSON))
+            .addHeader("Content-Type", "application/json").addHeader("Accept", "application/json").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val trailer = JSONObject(response.body?.string().orEmpty()).optJSONObject("data")
+                ?.optJSONObject("Media")?.optJSONObject("trailer") ?: return@withContext null
+            if (!trailer.optString("site").equals("youtube", true)) return@withContext null
+            val id = trailer.optString("id")
+            if (!id.matches(Regex("^[A-Za-z0-9_-]{11}$"))) return@withContext null
+            "https://www.youtube.com/watch?v=$id"
+        }
+    }
+
+    suspend fun loadCharacters(titleId: String): List<RykoCharacter> {
+        val raw = request("/rest/v1/characters?select=id,title_id,name,role,description,image_url&title_id=eq.$titleId&order=name.asc", auth = false)
+        val arr = JSONArray(raw)
+        return (0 until arr.length()).map { i -> arr.getJSONObject(i).let { c ->
+            RykoCharacter(c.optString("id"), c.optString("title_id"), c.optString("name"),
+                c.optString("role"), c.optString("description"), c.optString("image_url"))
+        } }
+    }
+
+    suspend fun signIn(mail: String, password: String) {
+        val result = JSONObject(request("/auth/v1/token?grant_type=password", "POST",
+            JSONObject().put("email", mail.trim()).put("password", password), auth = false))
+        saveSession(result, mail)
+    }
+    suspend fun signUp(mail: String, password: String) {
+        val result = JSONObject(request("/auth/v1/signup", "POST",
+            JSONObject().put("email", mail.trim()).put("password", password), auth = false))
+        if (result.has("access_token")) saveSession(result, mail)
+    }
+    private fun saveSession(result: JSONObject, mail: String) {
+        val user = result.optJSONObject("user") ?: JSONObject()
+        prefs.edit().putString("access_token", result.optString("access_token"))
+            .putString("refresh_token", result.optString("refresh_token"))
+            .putString("user_id", user.optString("id"))
+            .putString("email", user.optString("email", mail)).apply()
+    }
+    fun signOut() { prefs.edit().clear().apply() }
+
+    suspend fun loadLibrary(): List<RykoTitle> {
+        val uid = userId ?: return emptyList()
+        val raw = request("/rest/v1/user_library?select=title_id&user_id=eq.$uid&limit=300")
+        val ids = JSONArray(raw)
+        if (ids.length() == 0) return emptyList()
+        val joined = (0 until ids.length()).map { ids.getJSONObject(it).getString("title_id") }
+            .joinToString(",") { "\"$it\"" }
+        val titles = request("/rest/v1/titles?select=id,name,anilist_id,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&id=in.${enc("($joined)")}&order=popularity.desc")
+        val arr = JSONArray(titles)
+        return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
+    }
+    suspend fun saveToLibrary(titleId: String) {
+        val uid = userId ?: error("Sign in to save titles")
+        request("/rest/v1/user_library", "POST", JSONObject().put("user_id", uid).put("title_id", titleId),
+            extraHeaders = mapOf("Prefer" to "resolution=ignore-duplicates,return=minimal"))
+    }
+    suspend fun removeFromLibrary(titleId: String) {
+        val uid = userId ?: error("Sign in to edit your library")
+        request("/rest/v1/user_library?user_id=eq.$uid&title_id=eq.$titleId", "DELETE")
+    }
+    suspend fun profile(): JSONObject {
+        val uid = userId ?: error("Sign in first")
+        val result = JSONArray(request("/rest/v1/profiles?select=username,display_name,avatar_url,bio&id=eq.$uid&limit=1"))
+        return if (result.length() > 0) result.getJSONObject(0) else JSONObject()
+    }
+    suspend fun comments(titleId: String): JSONArray =
+        JSONArray(request("/rest/v1/community_comments?select=id,user_id,body,created_at&title_id=eq.$titleId&order=created_at.desc&limit=30", auth = false))
+    suspend fun postComment(titleId: String, body: String) {
+        val uid = userId ?: error("Sign in to comment")
+        request("/rest/v1/community_comments", "POST",
+            JSONObject().put("title_id", titleId).put("user_id", uid).put("body", body.trim()))
+    }
+    suspend fun isAdmin(): Boolean {
+        val uid = userId ?: return false
+        return JSONArray(request("/rest/v1/admin_users?select=user_id&user_id=eq.$uid&limit=1")).length() > 0
+    }
+    private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
+    private fun JSONObject.toTitle() = RykoTitle(
+        id = optString("id"), name = optString("name"), type = optString("media_type"),
+        synopsis = optString("synopsis"), cover = optString("cover_url"),
+        genres = optJSONArray("genres").toStringList(), status = optString("status"),
+        year = if (isNull("release_year")) null else optInt("release_year"),
+        rating = if (isNull("rating")) null else optString("rating"), popularity = optInt("popularity"),
+        alternativeNames = optJSONArray("alternative_names").toStringList(), themes = optJSONArray("themes").toStringList(),
+        chapters = optString("chapters"), episodes = optString("episodes"), author = optString("author"),
+        artist = optString("artist"), studio = optString("studio"), country = optString("country"),
+        trailerUrl = optString("trailer_url"), banner = optString("banner_url"), season = optString("season"),
+        sourceUrl = optString("source_url"), featured = optBoolean("is_featured"), trending = optBoolean("is_trending"), anilistId = if (isNull("anilist_id")) null else optInt("anilist_id")
+    )
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        return (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
+    }
+}
+}id,type:ANIME){trailer{id site}}}"""
         val payload = JSONObject().put("query", query).put("variables", JSONObject().put("id", anilistId))
         val request = Request.Builder().url("https://graphql.anilist.co")
             .post(payload.toString().toRequestBody(JSON))
