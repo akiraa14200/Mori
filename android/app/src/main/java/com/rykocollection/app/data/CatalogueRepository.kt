@@ -24,7 +24,7 @@ class CatalogueRepository {
                 require(offset >= 0) { "Page offset cannot be negative." }
                 val term = query.trim().take(80)
                 val page = (offset / limit) + 1
-                val key = "$term|${'$'}page|$limit"
+                val key = "$term|$page|$limit"
                 cache[key]?.takeIf { it.first > System.currentTimeMillis() }?.let {
                     return@withContext Result.success(it.second)
                 }
