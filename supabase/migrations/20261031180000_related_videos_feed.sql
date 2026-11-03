@@ -4,7 +4,7 @@ create table if not exists public.related_videos (
   id uuid primary key default gen_random_uuid(),
   title_id uuid not null references public.titles(id) on delete cascade,
   video_url text not null check (video_url ~* '^https?://'),
-  platform text not null check (platform in ('youtube','instagram','dailymotion')),
+  platform text not null constraint related_videos_platform_check check (platform in ('youtube','instagram','dailymotion','tiktok')),
   video_title text not null default '',
   creator_name text not null default '',
   creator_avatar_url text not null default '',
@@ -15,12 +15,19 @@ create table if not exists public.related_videos (
   updated_at timestamptz not null default now()
 );
 
+alter table public.related_videos drop constraint if exists related_videos_platform_check;
+alter table public.related_videos add constraint related_videos_platform_check check (platform in ('youtube','instagram','dailymotion','tiktok'));
+
+create unique index if not exists related_videos_title_url_uidx
+  on public.related_videos (title_id, video_url);
 create index if not exists related_videos_feed_idx
   on public.related_videos (sort_order asc, created_at desc);
 create index if not exists related_videos_title_idx
   on public.related_videos (title_id, sort_order asc);
 
 alter table public.related_videos enable row level security;
+grant select on table public.related_videos to anon, authenticated;
+grant insert, update, delete on table public.related_videos to authenticated;
 
 drop policy if exists "Public can read related videos" on public.related_videos;
 create policy "Public can read related videos"
@@ -62,7 +69,7 @@ declare
   settings_value jsonb;
   title_key text;
   video_value jsonb;
-  video_url text;
+  v_url text;
   platform_value text;
 begin
   select value into settings_value from public.site_settings where key = 'related_videos_by_title' limit 1;
