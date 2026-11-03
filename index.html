@@ -1481,7 +1481,7 @@ function setCatalogue(rows){
 const CATALOGUE_PAGE_SIZE=250;
 let catalogueOffset=0,catalogueHasMore=false,catalogueLoading=false,remoteSearchLast='';
 async function fetchTitlesRestPage(from,limit=CATALOGUE_PAGE_SIZE){
- const url=new URL(cfg.supabaseUrl.replace(/\\/$/,'')+'/rest/v1/titles');
+ const url=new URL(cfg.supabaseUrl.replace(/\/$/,'')+'/rest/v1/titles');
  url.searchParams.set('select','*');
  url.searchParams.set('order','created_at.desc,id.asc');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
@@ -1497,7 +1497,7 @@ async function fetchTitlesRestPage(from,limit=CATALOGUE_PAGE_SIZE){
 async function fetchCataloguePage(offset=0,query=''){
  if(!state.admin&&cfg.cloudflareD1Url){
   try{
-   const url=new URL(cfg.cloudflareD1Url.replace(/\\/$/,'')+'/api/titles');
+   const url=new URL(cfg.cloudflareD1Url.replace(/\/$/,'')+'/api/titles');
    url.searchParams.set('limit',String(CATALOGUE_PAGE_SIZE));url.searchParams.set('offset',String(offset));
    if(query)url.searchParams.set('q',query);
    const response=await fetch(url.toString(),{headers:{Accept:'application/json'},signal:AbortSignal.timeout(10000),cache:'no-store'});
