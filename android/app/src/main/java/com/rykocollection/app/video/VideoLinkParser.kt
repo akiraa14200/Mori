@@ -5,21 +5,28 @@ import java.net.URLDecoder
 
 object VideoLinkParser {
     private val idPattern = Regex("^[A-Za-z0-9_-]{11}$")
+    private val supportedHosts = setOf(
+        "youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+        "youtube-nocookie.com",
+        "m.youtube-nocookie.com"
+    )
 
     fun youtubeVideoId(rawUrl: String): String? {
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
         val host = uri.host?.lowercase()?.removePrefix("www.") ?: return null
-        if (host !in setOf("youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com", "m.youtube-nocookie.com")) return null
+        if (host !in supportedHosts) return null
 
         val segments = uri.path.orEmpty().split('/').filter(String::isNotBlank)
         val candidate = when {
             host == "youtu.be" -> segments.firstOrNull()
             segments.firstOrNull() == "watch" -> uri.rawQuery.orEmpty()
                 .split('&')
-                .firstOrNull { it.startsWith("v=") }
-                ?.substringAfter("v=")
+                .firstOrNull { it.substringBefore('=') == "v" }
+                ?.substringAfter('=', "")
                 ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull() }
-            segments.firstOrNull()?.let { it in setOf("shorts", "embed", "live") } == true -> segments.getOrNull(1)
+            segments.firstOrNull() in setOf("shorts", "embed", "live") -> segments.getOrNull(1)
             else -> null
         }
         return candidate?.takeIf(idPattern::matches)
