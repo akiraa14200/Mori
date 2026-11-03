@@ -1,9 +1,6 @@
 package com.rykocollection.app.ui
 
 import android.graphics.Color as AndroidColor
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -262,6 +259,14 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                            TextButton(onClick = {
+                        val url = videoId?.let { "https://www.youtube.com/watch?v=$it" } ?: video.actionUrl
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        }
+                    }) {
+                        Text("Open on YouTube", color = Color(0xFFE8C547))
+                    }
                     TextButton(onClick = onDismiss) {
                         Text("Close", color = Color(0xFFE8C547))
                     }
@@ -282,31 +287,6 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-private class YouTubePlayerBridge(
-    private val onReady: () -> Unit,
-    private val onError: (String) -> Unit
-) {
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    @JavascriptInterface
-    fun playerReady() {
-        mainHandler.post(onReady)
-    }
-
-    @JavascriptInterface
-    fun playerError(code: Int) {
-        val message = when (code) {
-            2 -> "YouTube rejected this video link."
-            5 -> "This video cannot play in the embedded HTML5 player."
-            100 -> "This video is unavailable, private, or has been removed."
-            101, 150 -> "The video owner does not allow embedded playback."
-            153 -> "YouTube could not verify the player request. Please update Android System WebView and try again."
-            else -> "YouTube player error ($code). This video may be restricted."
-        }
-        mainHandler.post { onError(message) }
     }
 }
 
@@ -374,16 +354,6 @@ private fun InAppWebPlayer(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { viewContext ->
-                        val bridge = YouTubePlayerBridge(
-                            onReady = {
-                                pageLoading = false
-                                playerError = null
-                            },
-                            onError = { message ->
-                                pageLoading = false
-                                playerError = message
-                            }
-                        )
                         WebView(viewContext).apply {
                             setBackgroundColor(AndroidColor.BLACK)
                             settings.javaScriptEnabled = true
@@ -396,7 +366,6 @@ private fun InAppWebPlayer(
                             settings.allowFileAccess = false
                             settings.allowContentAccess = false
                             webChromeClient = WebChromeClient()
-                            addJavascriptInterface(bridge, "RykoBridge")
                             webViewClient = object : WebViewClient() {
                                 override fun onReceivedError(
                                     view: WebView,
@@ -418,6 +387,10 @@ private fun InAppWebPlayer(
                                         pageLoading = false
                                         playerError = "Player server returned HTTP ${errorResponse.statusCode}."
                                     }
+                                }
+
+                                override fun onPageFinished(view: WebView, url: String) {
+                                    pageLoading = false
                                 }
 
                                 override fun shouldOverrideUrlLoading(
@@ -443,33 +416,17 @@ private fun InAppWebPlayer(
                                     <meta name="referrer" content="strict-origin-when-cross-origin">
                                     <style>
                                       html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
-                                      #player { position:absolute; inset:0; width:100%; height:100%; }
+                                      iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
                                     </style>
                                   </head>
                                   <body>
-                                    <div id="player"></div>
-                                    <script>
-                                      var ytPlayer;
-                                      function onYouTubeIframeAPIReady() {
-                                        ytPlayer = new YT.Player('player', {
-                                          width: '100%',
-                                          height: '100%',
-                                          videoId: '$youtubeVideoId',
-                                          playerVars: {
-                                            playsinline: 1,
-                                            autoplay: 0,
-                                            controls: 1,
-                                            rel: 0,
-                                            origin: 'https://rykocollection.vercel.app'
-                                          },
-                                          events: {
-                                            onReady: function() { RykoBridge.playerReady(); },
-                                            onError: function(event) { RykoBridge.playerError(event.data); }
-                                          }
-                                        });
-                                      }
-                                    </script>
-                                    <script src="https://www.youtube.com/iframe_api"></script>
+                                    <iframe
+                                      src="https://www.youtube-nocookie.com/embed/$youtubeVideoId?rel=0&playsinline=1"
+                                      title="YouTube video player"
+                                      referrerpolicy="strict-origin-when-cross-origin"
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                      allowfullscreen>
+                                    </iframe>
                                   </body>
                                 </html>
                             """.trimIndent()
