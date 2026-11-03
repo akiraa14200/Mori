@@ -239,6 +239,7 @@ private fun VideoCard(video: RelatedVideo, onWatch: () -> Unit) {
 
 @Composable
 private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val videoId = remember(video.videoUrl) { VideoLinkParser.youtubeVideoId(video.videoUrl) }
     Dialog(
         onDismissRequest = onDismiss,
@@ -259,7 +260,7 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                            TextButton(onClick = {
+                    TextButton(onClick = {
                         val url = videoId?.let { "https://www.youtube.com/watch?v=$it" } ?: video.actionUrl
                         runCatching {
                             context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
