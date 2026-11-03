@@ -1,6 +1,8 @@
 package com.ryko.collection
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val backend = Backend(this)
+        RykoAppContext.current = this
         setContent { RykoApp(backend) }
     }
 }
@@ -190,6 +193,25 @@ private fun RykoApp(api: Backend) {
                             OutlinedButton(onClick = {
                                 api.signOut(); library = emptyList(); isAdmin = false; profile = ""; refresh()
                             }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+                        }
+                    }
+                    "Video" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        item {
+                            Text("VIDEO", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                            Text("Trailers & previews", color = White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Discover video previews for titles in the Ryko catalogue.", color = Muted, fontSize = 13.sp)
+                        }
+                        items(titles) { title ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (title.cover.isNotBlank()) AsyncImage(model = title.cover, contentDescription = title.name, modifier = Modifier.width(76.dp).height(96.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(title.name, color = White, fontWeight = FontWeight.Bold)
+                                        Text("Official trailer search", color = Muted, fontSize = 11.sp)
+                                        TextButton(onClick = { openVideo(title.name) }) { Text("Find video ▶", color = Gold) }
+                                    }
+                                }
+                            }
                         }
                     }
                     else -> LazyColumn(
@@ -399,3 +421,6 @@ private fun EmptyState(title: String, subtitle: String, action: () -> Unit) {
         }
     }
 }
+
+private fun openVideo(title: String) { val c = RykoAppContext.current ?: return; val u = "https://www.youtube.com/results?search_query=" + Uri.encode("$title official trailer"); c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }
+private object RykoAppContext { var current: android.content.Context? = null }
