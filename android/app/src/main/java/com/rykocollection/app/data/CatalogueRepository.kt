@@ -4,11 +4,8 @@ import com.rykocollection.app.model.CatalogueTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.selects.select
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -29,39 +26,26 @@ class CatalogueRepository {
             require(limit in 1..100) { "Page size must be between 1 and 100." }
             require(offset >= 0) { "Page offset cannot be negative." }
 
-            withTimeout(15_000) {
-                coroutineScope {
-                    // Race the public D1 cache and Supabase. Return the first non-empty
-                    // successful page rather than waiting for a slow secondary source.
-                    val worker = async { capture { fetchFromWorker(query, limit, offset) } }
-                    val database = async { capture { fetchFromSupabase(query, limit, offset) } }
-                    try {
-                        val first = select<Pair<Boolean, Result<List<CatalogueTitle>>>> {
-                            worker.onAwait { true to it }
-                            database.onAwait { false to it }
-                        }
-                        first.second.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@coroutineScope it }
-
-                        val second = if (first.first) database.await() else worker.await()
-                        second.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@coroutineScope it }
-
-                        when {
-                            first.second.isFailure && second.isFailure -> throw IllegalStateException(
-                                "Both catalogue sources failed. D1: ${first.second.exceptionOrNull()?.message}; " +
-                                    "Supabase: ${second.exceptionOrNull()?.message}",
-                                first.second.exceptionOrNull()
-                            )
-                            first.second.isFailure -> throw IllegalStateException(
-                                "Catalogue source failed: ${first.second.exceptionOrNull()?.message}"
-                            )
-                            second.isFailure -> throw IllegalStateException(
-                                "Catalogue fallback failed: ${second.exceptionOrNull()?.message}"
-                            )
-                            else -> emptyList()
-                        }
-                    } finally {
-                        worker.cancel()
-                        database.cancel()
+            withTimeout(20_000) {
+                // Supabase is the verified source of truth: its public SELECT grant,
+                // RLS policy, and 15 non-empty title records were checked. D1 remains
+                // the fallback cache if the direct REST request fails.
+                val primary = capture { fetchFromSupabase(query, limit, offset) }
+                primary.getOrNull()?.takeIf { it.isNotEmpty() } ?: run {
+                    val fallback = capture { fetchFromWorker(query, limit, offset) }
+                    fallback.getOrNull()?.takeIf { it.isNotEmpty() } ?: when {
+                        primary.isFailure && fallback.isFailure -> throw IllegalStateException(
+                            "Catalogue could not load. Supabase: ${primary.exceptionOrNull()?.message}; " +
+                                "Cloudflare D1: ${fallback.exceptionOrNull()?.message}",
+                            primary.exceptionOrNull()
+                        )
+                        primary.isFailure -> throw IllegalStateException(
+                            "Supabase failed and Cloudflare D1 returned no titles: ${primary.exceptionOrNull()?.message}"
+                        )
+                        fallback.isFailure -> throw IllegalStateException(
+                            "Supabase returned no titles and Cloudflare D1 failed: ${fallback.exceptionOrNull()?.message}"
+                        )
+                        else -> emptyList()
                     }
                 }
             }.let { Result.success(it) }
