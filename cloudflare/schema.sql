@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS titles (
  synopsis TEXT NOT NULL DEFAULT '', cover_url TEXT NOT NULL DEFAULT '', banner_url TEXT NOT NULL DEFAULT '',
  genres TEXT NOT NULL DEFAULT '[]', themes TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'Ongoing',
  release_year INTEGER, season TEXT, rating REAL, popularity INTEGER NOT NULL DEFAULT 0, chapters TEXT, episodes TEXT,
- author TEXT, artist TEXT, studio TEXT, country TEXT, source_url TEXT, anilist_id INTEGER, trailer_url TEXT,
+ author TEXT, artist TEXT, studio TEXT, country TEXT, source_url TEXT, read_url TEXT, anilist_id INTEGER, trailer_url TEXT,
  is_trending INTEGER NOT NULL DEFAULT 0, is_featured INTEGER NOT NULL DEFAULT 0,
  created_at TEXT, updated_at TEXT, synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sync_run_id TEXT
 );
