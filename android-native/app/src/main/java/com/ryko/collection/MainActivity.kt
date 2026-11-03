@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
 private fun RykoApp(api: Backend) {
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf("Home") }
+    var mediaMode by remember { mutableStateOf("Anime") }
     var titles by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
     var library by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
     var selected by remember { mutableStateOf<RykoTitle?>(null) }
@@ -142,6 +143,7 @@ private fun RykoApp(api: Backend) {
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (tab) {
                     "Browse" -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.End) { listOf("Anime", "Manga").forEach { mode -> FilterChip(selected = mediaMode == mode, onClick = { mediaMode = mode }, label = { Text(mode) }, modifier = Modifier.padding(start = 6.dp)) } }
                         OutlinedTextField(
                             value = search, onValueChange = { search = it },
                             modifier = Modifier.fillMaxWidth(),
@@ -162,7 +164,7 @@ private fun RykoApp(api: Backend) {
                             colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) {
                             Text("Search catalogue")
                         }
-                        Catalogue(titles, busy, error, { selected = it })
+                        Catalogue(titles.filter { it.type.contains(mediaMode, ignoreCase = true) || (mediaMode == "Anime" && it.type.contains("TV", true)) }, busy, error, { selected = it })
                     }
                     "Library" -> {
                         if (!api.signedIn) EmptyState(
