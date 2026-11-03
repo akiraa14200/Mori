@@ -16,6 +16,11 @@ class VideoLinkParserTest {
     }
 
     @Test
+    fun extractsIdWhenWatchQueryParametersAreReordered() {
+        assertEquals("abc123XYZ_0", VideoLinkParser.youtubeVideoId("https://m.youtube.com/watch?feature=share&v=abc123XYZ_0"))
+    }
+
+    @Test
     fun extractsIdFromYouTubeShortsUrl() {
         assertEquals("abc123XYZ_0", VideoLinkParser.youtubeVideoId("https://youtube.com/shorts/abc123XYZ_0"))
     }
