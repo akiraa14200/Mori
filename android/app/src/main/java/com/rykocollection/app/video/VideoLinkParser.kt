@@ -9,7 +9,7 @@ object VideoLinkParser {
     fun youtubeVideoId(rawUrl: String): String? {
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
         val host = uri.host?.lowercase()?.removePrefix("www.") ?: return null
-        if (host != "youtube.com" && host != "m.youtube.com" && host != "youtu.be") return null
+        if (host !in setOf("youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com", "m.youtube-nocookie.com")) return null
 
         val segments = uri.path.orEmpty().split('/').filter(String::isNotBlank)
         val candidate = when {
