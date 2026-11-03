@@ -94,7 +94,7 @@ class Backend(context: Context) {
     }
 
     suspend fun loadAniListTrailer(anilistId: Int): String? = withContext(Dispatchers.IO) {
-        val query = "query (\\$id:Int){Media(id:\\$id,type:ANIME){trailer{id site}}}"
+        val query = "query (\$id:Int){Media(id:\$id,type:ANIME){trailer{id site}}}"
         val payload = JSONObject().put("query", query).put("variables", JSONObject().put("id", anilistId))
         val request = Request.Builder().url("https://graphql.anilist.co")
             .post(payload.toString().toRequestBody(JSON))
@@ -194,5 +194,4 @@ class Backend(context: Context) {
         if (this == null) return emptyList()
         return (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
     }
-}
 }
