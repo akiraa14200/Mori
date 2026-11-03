@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -463,7 +464,7 @@ private fun FeaturedCarousel(data: List<RykoTitle>, onSelect: (RykoTitle) -> Uni
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LazyRow(state = state, contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(data, key = { it.id }) { title ->
-                Box(Modifier.fillParentMaxWidth(0.92f).height(230.dp).clickable { onSelect(title) }.background(Panel, RoundedCornerShape(20.dp))) {
+                Box(Modifier.fillParentMaxWidth(0.92f).aspectRatio(16f / 10f).clickable { onSelect(title) }.background(Panel, RoundedCornerShape(20.dp))) {
                     val image = title.banner.ifBlank { title.cover }
                     if (image.isNotBlank()) AsyncImage(model = image, contentDescription = title.name, modifier = Modifier.fillMaxSize())
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF0000000)))))
@@ -562,27 +563,31 @@ private fun openVideoUrl(url: String) { val c = RykoAppContext.current ?: return
 
 @Composable
 private fun HomeSection(title: String, subtitle: String, data: List<RykoTitle>, onSelect: (RykoTitle) -> Unit, onSeeAll: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text(title, color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = Muted, fontSize = 11.sp) }
             TextButton(onClick = onSeeAll) { Text("View all  ›", color = Color(0xFFB9A5FF)) }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(data, key = { it.id }) { item ->
-                Column(Modifier.width(132.dp).clickable { onSelect(item) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.fillMaxWidth().height(184.dp).background(Panel, RoundedCornerShape(13.dp))) {
-                        if (item.cover.isNotBlank()) AsyncImage(model = item.cover, contentDescription = item.name, modifier = Modifier.fillMaxSize())
-                        Surface(color = Color(0xDD171923), shape = RoundedCornerShape(7.dp), modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
-                            Text(item.type.uppercase(), color = White, fontSize = 8.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
+        data.chunked(3).forEach { rowItems ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                rowItems.forEach { item ->
+                    Column(Modifier.weight(1f).clickable { onSelect(item) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(0.68f).background(Panel, RoundedCornerShape(12.dp))) {
+                            if (item.cover.isNotBlank()) AsyncImage(model = item.cover, contentDescription = item.name, modifier = Modifier.fillMaxSize())
+                            Surface(color = Color(0xDD171923), shape = RoundedCornerShape(7.dp), modifier = Modifier.align(Alignment.TopStart).padding(5.dp)) {
+                                Text(item.type.uppercase(), color = White, fontSize = 7.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp), maxLines = 1)
+                            }
                         }
+                        Text(item.name, color = White, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+                        Text(item.status, color = Muted, fontSize = 9.sp, maxLines = 1)
                     }
-                    Text(item.name, color = White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(item.status, color = Muted, fontSize = 10.sp, maxLines = 1)
                 }
+                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
+
 private fun youtubeId(url: String): String? {
     val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
     return when (uri.host?.lowercase()) {
