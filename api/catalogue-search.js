@@ -329,7 +329,6 @@ async function handleCatalogueRequest(request) {
   } finally {
     providerInFlight.delete(cacheKey);
   }
-  }
 }
 
 
