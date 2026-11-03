@@ -1492,7 +1492,7 @@ async function fetchTitlesRestPage(from){
  }finally{clearTimeout(timer)}
 }
 async function fetchTitlesD1Page(from){
- const base=String(cfg.cloudflareD1Url||'').replace(/\\/$/,'');
+ const base=String(cfg.cloudflareD1Url||'').replace(/\/$/,'');
  if(!base)return null;
  const fetchChunk=async offset=>{
   const url=new URL(base+'/api/titles');
