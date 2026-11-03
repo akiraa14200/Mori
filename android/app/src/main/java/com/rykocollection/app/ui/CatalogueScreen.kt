@@ -177,8 +177,6 @@ private fun TitleCard(title: CatalogueTitle, onClick: () -> Unit) {
         ImageRequest.Builder(context)
             .data(title.coverUrl.takeIf(String::isNotBlank))
             .crossfade(false)
-            .placeholder(ColorPainter(Color(0xFF292B31)))
-            .error(ColorPainter(Color(0xFF292B31)))
             .build()
     }
     Row(
@@ -189,6 +187,8 @@ private fun TitleCard(title: CatalogueTitle, onClick: () -> Unit) {
         AsyncImage(
             model = imageRequest,
             contentDescription = title.name,
+            placeholder = ColorPainter(Color(0xFF292B31)),
+            error = ColorPainter(Color(0xFF292B31)),
             modifier = Modifier.width(94.dp).height(128.dp).clip(RoundedCornerShape(12.dp)),
             contentScale = ContentScale.Crop
         )
