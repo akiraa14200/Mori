@@ -19,7 +19,7 @@ object VideoLinkParser {
                 .firstOrNull { it.startsWith("v=") }
                 ?.substringAfter("v=")
                 ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull() }
-            segments.firstOrNull() in setOf("shorts", "embed", "live") -> segments.getOrNull(1)
+            segments.firstOrNull()?.let { it in setOf("shorts", "embed", "live") } == true -> segments.getOrNull(1)
             else -> null
         }
         return candidate?.takeIf(idPattern::matches)
