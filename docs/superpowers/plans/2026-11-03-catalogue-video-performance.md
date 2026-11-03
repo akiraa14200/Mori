@@ -11,7 +11,7 @@
 **Spec:** `docs/superpowers/specs/2026-11-03-catalogue-video-performance-design.md`
 
 ## Global Constraints
-- Preserve the 8 existing title-keyed video groups / 13 URLs and 3 saved soundtrack records.
+- Preserve the 8 existing title-keyed video groups / 14 URLs and 3 saved soundtrack records.
 - Never expose Supabase service-role credentials or Worker sync secrets in the browser.
 - Keep metadata provider importer and admin CRUD behavior intact.
 - Public video reads are allowed; related-video writes require an `admin_users` row.
@@ -44,7 +44,7 @@
 - [ ] Update the migration to support YouTube, Instagram, Dailymotion, and TikTok; add a unique `(title_id, video_url)` index; preserve legacy JSON.
 - [ ] Update schema snapshot consistently.
 - [ ] Run migration test and inspect SQL.
-- [ ] Apply the migration to Supabase, then query counts and sample URLs to verify all 13 existing URLs migrated.
+- [ ] Apply the migration to Supabase, then query counts and sample URLs to verify all 14 existing URLs migrated, including 2 orphaned legacy IDs.
 
 ### Task 2: Related-video data access and admin editing
 
@@ -135,7 +135,7 @@
 - Test: all existing and new tests
 
 - [ ] Run every Node test, provider smoke workflow checks, and syntax checks.
-- [ ] Verify the database row count and confirm all 13 migrated URLs are present.
+- [ ] Verify the database row count and confirm all 14 migrated or preserved URLs are present.
 - [ ] Verify provider import function names and admin add/edit handlers remain in place.
 - [ ] Deploy the branch to Vercel Preview; inspect build logs and test the preview routes.
 - [ ] Only promote to production after the preview is verified.
