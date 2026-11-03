@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.clickable
@@ -65,6 +66,7 @@ private fun RykoApp(api: Backend) {
     var library by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
     var selected by remember { mutableStateOf<RykoTitle?>(null) }
     var playingVideo by remember { mutableStateOf<RykoRelatedVideo?>(null) }
+    var resolvedTrailers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var search by remember { mutableStateOf("") }
     var email by remember { mutableStateOf(api.email.orEmpty()) }
     var password by remember { mutableStateOf("") }
@@ -334,6 +336,7 @@ private fun RykoApp(api: Backend) {
             LaunchedEffect(title.id) {
                 try { characters = api.loadCharacters(title.id) } catch (_: Exception) { }
                 try { comments = api.comments(title.id) } catch (_: Exception) { }
+                if (youtubeId(title.trailerUrl) == null && title.anilistId != null) { try { api.loadAniListTrailer(title.anilistId)?.let { resolvedTrailers = resolvedTrailers + (title.id to it) } } catch (_: Exception) { } }
             }
             Dialog(onDismissRequest = { selected = null }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
                 Column(Modifier.fillMaxSize().background(Ink)) {
@@ -379,7 +382,7 @@ private fun RykoApp(api: Backend) {
                                         Text(title.synopsis.ifBlank { "No description available." }, color = Muted, fontSize = 14.sp, lineHeight = 23.sp)
                                         Text("OFFICIAL PREVIEW", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
                                         Text("Trailer", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                                        val trailer = title.trailerUrl.ifBlank { relatedVideos.firstOrNull { it.titleId == title.id && it.platform == "youtube" }?.videoUrl.orEmpty() }
+                                        val trailer = title.trailerUrl.takeIf { youtubeId(it) != null } ?: resolvedTrailers[title.id] ?: relatedVideos.firstOrNull { it.titleId == title.id && youtubeId(it.videoUrl) != null }?.videoUrl.orEmpty()
                                         if (trailer.isNotBlank()) VideoPreview(trailer, "youtube", { url, platform -> playingVideo = RykoRelatedVideo("trailer-${title.id}", title.id, url, platform, "Official trailer", "", "", "watch", url, 0) })
                                         else Text("No trailer added for this entry.", color = Muted, fontSize = 12.sp)
                                         Text("RELATED VIDEOS", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
@@ -589,25 +592,28 @@ private fun HomeSection(title: String, subtitle: String, data: List<RykoTitle>, 
 }
 
 private fun youtubeId(url: String): String? {
-    val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
-    return when (uri.host?.lowercase()) {
-        "youtu.be" -> uri.lastPathSegment
-        "youtube.com", "www.youtube.com", "m.youtube.com", "www.youtube-nocookie.com" ->
-            uri.getQueryParameter("v") ?: uri.pathSegments.firstOrNull { it == "embed" || it == "shorts" }?.let { marker ->
-                val index = uri.pathSegments.indexOf(marker); uri.pathSegments.getOrNull(index + 1)
+    val uri = runCatching { Uri.parse(url.trim()) }.getOrNull() ?: return null
+    val host = uri.host?.lowercase()?.removePrefix("www.") ?: return null
+    val id = when (host) {
+        "youtu.be" -> uri.pathSegments.firstOrNull()
+        "youtube.com", "m.youtube.com", "youtube-nocookie.com" -> {
+            val parts = uri.pathSegments
+            when {
+                uri.path == "/watch" -> uri.getQueryParameter("v")
+                parts.firstOrNull() in listOf("embed", "shorts", "live") -> parts.getOrNull(1)
+                else -> null
             }
+        }
         else -> null
-    }?.takeIf { it.isNotBlank() }
+    } ?: return null
+    return id.takeIf { it.matches(Regex("^[A-Za-z0-9_-]{11}$")) }
 }
+
 private fun videoThumbnail(video: RykoRelatedVideo): String? =
     youtubeId(video.videoUrl)?.let { "https://img.youtube.com/vi/$it/hqdefault.jpg" }
 private fun playerHtml(url: String, platform: String): String {
     val yt = youtubeId(url)
-    val src = if (yt != null) "https://www.youtube-nocookie.com/embed/$yt?autoplay=1&playsinline=1"
-        else if (platform == "instagram") {
-            val uri = Uri.parse(url)
-            val host = uri.host?.lowercase().orEmpty()
-            if (host.endsWith("instagram.com") || host.endsWith("instagr.am")) "https://www.instagram.com${uri.path.orEmpty().trimEnd('/')}/embed" else url
-        } else url
-    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="$src" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>"""
+    if (yt == null) return """<!doctype html><html><body style="margin:0;background:#101116;color:#ddd;font:14px Arial;display:grid;place-items:center;height:100vh;text-align:center">This link is not a valid embeddable YouTube video.</body></html>"""
+    val src = "https://www.youtube-nocookie.com/embed/" + yt + "?rel=0&playsinline=1&controls=1&enablejsapi=1"
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#08090d;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}#error{display:none;position:absolute;inset:0;background:#101116;color:#ddd;place-items:center;text-align:center;padding:20px}a{color:#c2adff}</style></head><body><div id="error">This video cannot be embedded.<br><a href="https://www.youtube.com/watch?v=$yt" target="_blank">Open original on YouTube</a></div><iframe id="player" src="$src" title="YouTube trailer" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><script>const e=document.getElementById('error');window.addEventListener('message',event=>{if(!event.origin.includes('youtube'))return;try{const d=typeof event.data==='string'?JSON.parse(event.data):event.data;if(d?.event==='onError')e.style.display='grid'}catch(_){}});document.getElementById('player').addEventListener('error',()=>e.style.display='grid');</script></body></html>"""
 }
