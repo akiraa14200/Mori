@@ -36,7 +36,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: android
-        run: gradle testDebugUnitTest
+        run: gradle clean testDebugUnitTest
 
       - name: Build debug APK
         working-directory: android
