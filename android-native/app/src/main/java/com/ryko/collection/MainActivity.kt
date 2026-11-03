@@ -214,7 +214,7 @@ private fun RykoApp(api: Backend) {
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                                 Text("RYKO VIDEO", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                                 Text("Watch & discover.", color = White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
-                                Text("\${relatedVideos.size} videos from your entries", color = Muted, fontSize = 12.sp)
+                                Text("${relatedVideos.size} videos from your entries", color = Muted, fontSize = 12.sp)
                             }
                         }
                         items(relatedVideos, key = { it.id }) { video ->
@@ -524,7 +524,7 @@ private fun playerHtml(url: String, platform: String): String {
         else if (platform == "instagram") {
             val uri = Uri.parse(url)
             val host = uri.host?.lowercase().orEmpty()
-            if (host.endsWith("instagram.com") || host.endsWith("instagr.am")) "https://www.instagram.com\${uri.path.orEmpty().trimEnd('/')}/embed" else url
+            if (host.endsWith("instagram.com") || host.endsWith("instagr.am")) "https://www.instagram.com${uri.path.orEmpty().trimEnd('/')}/embed" else url
         } else url
     return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="$src" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>"""
 }
