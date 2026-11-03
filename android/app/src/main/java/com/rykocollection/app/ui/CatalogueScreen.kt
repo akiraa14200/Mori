@@ -49,6 +49,7 @@ fun CatalogueScreen(
 
     LaunchedEffect(search, retryKey) {
         if (search.isNotBlank()) delay(320)
+        listState.scrollToItem(0)
         initialLoading = true
         loadingMore = false
         hasMore = true
