@@ -1520,7 +1520,8 @@ async function loadMoreCatalogue(){
   const rows=await fetchCataloguePage(catalogueOffset);
   const known=new Set(state.titles.map(t=>String(t.id)));
   const fresh=rows.filter(t=>!known.has(String(t.id)));
-  if(fresh.length){setCatalogue([...state.titles,...fresh]);catalogueOffset+=rows.length}
+  if(fresh.length)setCatalogue([...state.titles,...fresh]);
+  catalogueOffset+=rows.length;
   catalogueHasMore=rows.length===CATALOGUE_PAGE_SIZE;
   try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:state.titles}))}catch(error){console.warn('Could not update saved catalogue cache:',error)}
   if(startupComplete&&state.route==='/browse')render(true);
@@ -2264,7 +2265,7 @@ async function loadVideosFeed(route,{append=false}={}){
      if(watchedLink){const watchedCard=watchedLink.closest('.video-feed-card'),watchedId=watchedCard?.dataset.videoEntryId;if(watchedId){let visits=[];try{const raw=JSON.parse(localStorage.getItem('ryko-video-visits-v1')||'[]');if(Array.isArray(raw))visits=raw}catch{}visits=[{id:String(watchedId),at:Date.now()},...visits.filter(v=>String(v?.id)!==String(watchedId))].slice(0,30);try{localStorage.setItem('ryko-video-visits-v1',JSON.stringify(visits))}catch(error){console.warn('Could not save video interest signal:',error.message)}}return}
      const more=e.target.closest('[data-video-load-more]');if(more){more.disabled=true;more.textContent='Loading…';loadVideosFeed(route,{append:true}).catch(error=>notify('Could not load more videos: '+error.message));return}
      const clear=e.target.closest('[data-video-clear]');if(clear){const search=document.getElementById('videos-entry-search');if(search)search.value='';state.videoFilter='All';state.videoFormatFilter='All';app.querySelectorAll('[data-video-format-filter]').forEach(x=>x.classList.toggle('active',x.dataset.videoFormatFilter==='All'));app.querySelectorAll('[data-video-filter]').forEach(x=>x.classList.toggle('active',x.dataset.videoFilter==='All'));filterVideoCards(box);return}
-     const button=e.target.closest('[data-remove-feed-video]');if(!button)return;e.preventDefault();e.stopPropagation();if(!state.admin)return notify('Admin access required');const rowId=button.dataset.videoRowId;if(!rowId||!confirm('Remove this video from the Videos section?'))return;button.disabled=true;button.textContent='Removing…';try{const {error}=await db.from('related_videos').delete().eq('id',rowId);if(error)throw error;videoFeedRows=videoFeedRows.filter(row=>String(row.id)!==String(rowId));renderVideoFeedItems(box,route);notify('Video removed from the Videos section')}catch(error){button.disabled=false;button.textContent='Remove';notify('Could not remove video: '+(error.message||'Please try again.'))}
+     const button=e.target.closest('[data-remove-feed-video]');if(!button)return;e.preventDefault();e.stopPropagation();if(!state.admin)return notify('Admin access required');const rowId=button.dataset.videoRowId;if(!rowId||!confirm('Remove this video from the Videos section?'))return;button.disabled=true;button.textContent='Removing…';try{const {error}=await db.from('related_videos').delete().eq('id',rowId);if(error)throw error;videoFeedRows=videoFeedRows.filter(row=>String(row.id)!==String(rowId));videoFeedOffset=Math.max(0,videoFeedOffset-1);stopEntryMediaExcept(null);renderVideoFeedItems(box,route);notify('Video removed from the Videos section')}catch(error){button.disabled=false;button.textContent='Remove';notify('Could not remove video: '+(error.message||'Please try again.'))}
     });
    }
    renderVideoFeedItems(box,route);
