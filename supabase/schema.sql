@@ -337,7 +337,8 @@ CREATE INDEX IF NOT EXISTS community_comments_user_created_idx ON public.communi
 -- Structured related-video records used by entry pages and the paginated Videos feed.
 create table if not exists public.related_videos (
   id uuid primary key default gen_random_uuid(),
-  title_id uuid not null references public.titles(id) on delete cascade,
+  title_id uuid references public.titles(id) on delete cascade,
+  legacy_title_id text,
   video_url text not null check (video_url ~* '^https?://'),
   platform text not null check (platform in ('youtube','instagram','dailymotion','tiktok')),
   video_title text not null default '',
@@ -350,6 +351,7 @@ create table if not exists public.related_videos (
   updated_at timestamptz not null default now()
 );
 create unique index if not exists related_videos_title_url_uidx on public.related_videos(title_id,video_url);
+create unique index if not exists related_videos_legacy_title_url_uidx on public.related_videos(legacy_title_id,video_url) where title_id is null and legacy_title_id is not null;
 create index if not exists related_videos_feed_idx on public.related_videos(sort_order asc,created_at desc);
 create index if not exists related_videos_title_idx on public.related_videos(title_id,sort_order asc);
 alter table public.related_videos enable row level security;
