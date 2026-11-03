@@ -14,6 +14,12 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
+data class RykoRelatedVideo(
+    val id: String, val titleId: String, val videoUrl: String, val platform: String,
+    val videoTitle: String, val creatorName: String, val creatorAvatarUrl: String,
+    val actionType: String, val actionUrl: String, val sortOrder: Int
+)
+
 data class RykoTitle(
     val id: String, val name: String, val type: String, val synopsis: String,
     val cover: String, val genres: List<String>, val status: String,
@@ -64,6 +70,21 @@ class Backend(context: Context) {
         val raw = request("/rest/v1/titles?select=id,name,media_type,synopsis,cover_url,genres,status,release_year,rating,popularity&order=popularity.desc&limit=60$filter", auth = false)
         val arr = JSONArray(raw)
         return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
+    }
+
+    suspend fun loadRelatedVideos(): List<RykoRelatedVideo> {
+        val raw = request("/rest/v1/related_videos?select=id,title_id,video_url,platform,video_title,creator_name,creator_avatar_url,action_type,action_url,sort_order&order=sort_order.asc,created_at.desc&limit=300", auth = false)
+        val arr = JSONArray(raw)
+        return (0 until arr.length()).map { i ->
+            val v = arr.getJSONObject(i)
+            RykoRelatedVideo(
+                id = v.optString("id"), titleId = v.optString("title_id"),
+                videoUrl = v.optString("video_url"), platform = v.optString("platform"),
+                videoTitle = v.optString("video_title"), creatorName = v.optString("creator_name"),
+                creatorAvatarUrl = v.optString("creator_avatar_url"), actionType = v.optString("action_type"),
+                actionUrl = v.optString("action_url"), sortOrder = v.optInt("sort_order")
+            )
+        }
     }
 
     suspend fun signIn(mail: String, password: String) {
