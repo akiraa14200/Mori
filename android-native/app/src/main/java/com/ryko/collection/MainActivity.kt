@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -18,6 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -55,6 +61,7 @@ private fun RykoApp(api: Backend) {
     var relatedVideos by remember { mutableStateOf<List<RykoRelatedVideo>>(emptyList()) }
     var library by remember { mutableStateOf<List<RykoTitle>>(emptyList()) }
     var selected by remember { mutableStateOf<RykoTitle?>(null) }
+    var playingVideo by remember { mutableStateOf<RykoRelatedVideo?>(null) }
     var search by remember { mutableStateOf("") }
     var email by remember { mutableStateOf(api.email.orEmpty()) }
     var password by remember { mutableStateOf("") }
@@ -242,38 +249,47 @@ private fun RykoApp(api: Backend) {
                             }
                         }
                     }
-                    else -> LazyColumn(
-                        Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
+                    else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         item {
-                            Box(
-                                Modifier.fillMaxWidth().background(
-                                    Brush.linearGradient(listOf(Color(0xFF292417), Panel, Color(0xFF171B25))),
-                                    RoundedCornerShape(26.dp)
-                                ).padding(22.dp)
-                            ) {
-                                Column {
-                                    Text("YOUR NEXT FAVOURITE", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
-                                    Text("Stories worth\nkeeping close.", color = White, fontSize = 28.sp, lineHeight = 33.sp, fontWeight = FontWeight.ExtraBold)
-                                    Text("Explore anime, manga, manhwa and more.", color = Muted, fontSize = 13.sp)
-                                    Spacer(Modifier.height(14.dp))
-                                    Button(onClick = { tab = "Browse" },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) {
-                                        Text("Explore catalogue")
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(210.dp)
+                                .background(Brush.linearGradient(listOf(Color(0xFF29204A), Color(0xFF171A2A), Color(0xFF102B35))), RoundedCornerShape(24.dp))) {
+                                Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xEE090B10))))
+                                    .padding(18.dp)) {
+                                    Text("RYKO ORIGINAL DISCOVERY", color = Color(0xFFD0B8FF), fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+                                    Text("Find your next\nfavourite story.", color = White, fontSize = 27.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Button(onClick = { tab = "Browse" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B83F5), contentColor = Ink)) { Text("Explore now") }
+                                        Spacer(Modifier.width(8.dp))
+                                        TextButton(onClick = { mediaMode = "Manga"; tab = "Browse" }) { Text("Manga library  ›", color = White) }
                                     }
                                 }
                             }
                         }
+                        item { HomeSection("Trending now", "Popular stories in the catalogue", titles.take(12), { selected = it }, { tab = "Browse" }) }
+                        item { HomeSection("Manga & manhwa", "Discover your next read", titles.filter { it.type.contains("manga", true) || it.type.contains("manhwa", true) }.take(12), { selected = it }, { mediaMode = "Manga"; tab = "Browse" }) }
+                        item { HomeSection("Anime collection", "Series worth adding to your list", titles.filter { it.type.contains("anime", true) || it.type.contains("tv", true) }.take(12), { selected = it }, { mediaMode = "Anime"; tab = "Browse" }) }
                         item {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Popular in Ryko", color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.weight(1f))
-                                TextButton(onClick = { tab = "Browse" }) { Text("See all", color = Gold) }
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { Text("From your video feed", color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text("Trailers and creator clips", color = Muted, fontSize = 11.sp) }
+                                TextButton(onClick = { tab = "Video" }) { Text("See all  ›", color = Color(0xFFB9A5FF)) }
                             }
                         }
-                        items(titles) { title -> TitleCard(title, { selected = title }, Modifier.fillMaxWidth()) }
+                        item {
+                            LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(relatedVideos.take(8), key = { it.id }) { v ->
+                                    Column(Modifier.width(230.dp).clickable { playingVideo = v }) {
+                                        Box(Modifier.fillMaxWidth().height(130.dp).background(Panel, RoundedCornerShape(14.dp))) {
+                                            val thumb = videoThumbnail(v)
+                                            if (thumb != null) AsyncImage(model = thumb, contentDescription = v.videoTitle, modifier = Modifier.fillMaxSize())
+                                            Icon(Icons.Default.PlayCircleFilled, null, tint = White, modifier = Modifier.align(Alignment.Center).size(42.dp))
+                                        }
+                                        Text(v.videoTitle.ifBlank { "Video from Ryko" }, color = White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(v.platform.replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if (busy) LinearProgressIndicator(Modifier.align(Alignment.TopCenter).fillMaxWidth(), color = Gold, trackColor = Panel)
