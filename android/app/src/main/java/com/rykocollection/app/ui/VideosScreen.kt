@@ -300,14 +300,45 @@ private fun InAppWebPlayer(
                 settings.allowContentAccess = false
                 settings.setSupportZoom(false)
                 webChromeClient = WebChromeClient()
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.setSupportMultipleWindows(false)
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 webViewClient = object : WebViewClient() {
+                    private fun handleNavigation(view: WebView?, rawUrl: String): Boolean {
+                        val uri = runCatching { android.net.Uri.parse(rawUrl) }.getOrNull() ?: return true
+                        val host = uri.host?.lowercase()?.removePrefix("www.").orEmpty()
+                        val isYoutubeHost = host == "youtube.com" ||
+                            host == "m.youtube.com" ||
+                            host == "youtu.be" ||
+                            host == "youtube-nocookie.com" ||
+                            host == "m.youtube-nocookie.com"
+
+                        if (isYoutubeHost) {
+                            val isEmbed = host.contains("youtube-nocookie.com") &&
+                                uri.path.orEmpty().startsWith("/embed/")
+                            if (isEmbed) return false
+
+                            val id = VideoLinkParser.youtubeVideoId(rawUrl)
+                            if (id != null) {
+                                view?.loadUrl(
+                                    "https://www.youtube-nocookie.com/embed/$id?playsinline=1&autoplay=0&rel=0"
+                                )
+                            }
+                            // Never hand YouTube navigation to Android or an external app.
+                            return true
+                        }
+
+                        return uri.scheme == "https" || uri.scheme == "http"
+                    }
+
                     override fun shouldOverrideUrlLoading(
                         view: WebView?,
                         request: WebResourceRequest?
-                    ): Boolean {
-                        val scheme = request?.url?.scheme?.lowercase()
-                        return scheme != "https" && scheme != "http"
-                    }
+                    ): Boolean = handleNavigation(view, request?.url?.toString().orEmpty())
+
+                    @Suppress("DEPRECATION")
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
+                        handleNavigation(view, url.orEmpty())
                 }
                 playerRef[0] = this
                 if (youtubeVideoId != null) {
