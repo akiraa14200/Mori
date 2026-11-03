@@ -1,8 +1,11 @@
 package com.rykocollection.app.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
+import android.annotation.SuppressLint
+import android.graphics.Color as AndroidColor
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.rykocollection.app.data.VideoRepository
@@ -40,6 +46,7 @@ fun VideosScreen() {
     val repository = remember { VideoRepository() }
     val listState = rememberLazyListState()
     var videos by remember { mutableStateOf<List<RelatedVideo>>(emptyList()) }
+    var selectedVideo by remember { mutableStateOf<RelatedVideo?>(null) }
     var initialLoading by remember { mutableStateOf(true) }
     var loadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
@@ -124,11 +131,7 @@ fun VideosScreen() {
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(videos, key = { it.id }) { video ->
-                    VideoCard(video = video, onWatch = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(video.videoUrl))
-                        runCatching { context.startActivity(intent) }
-                            .onFailure { Toast.makeText(context, "No app can open this video link.", Toast.LENGTH_SHORT).show() }
-                    })
+                    VideoCard(video = video, onWatch = { selectedVideo = video })
                 }
                 if (loadingMore) item(key = "videos-loading-more") {
                     Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
@@ -142,6 +145,10 @@ fun VideosScreen() {
                 }
             }
         }
+    }
+
+    selectedVideo?.let { video ->
+        InAppVideoDialog(video = video, onDismiss = { selectedVideo = null })
     }
 }
 
@@ -223,6 +230,125 @@ private fun VideoCard(video: RelatedVideo, onWatch: () -> Unit) {
         )
         if (video.creatorName.isNotBlank()) {
             Text(video.creatorName, modifier = Modifier.padding(top = 5.dp), color = Color(0xFF9B9CA4), fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
+    val videoId = remember(video.videoUrl) { VideoLinkParser.youtubeVideoId(video.videoUrl) }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp).padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF17191F)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        video.videoTitle,
+                        modifier = Modifier.weight(1f),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    TextButton(onClick = onDismiss) {
+                        Text("Close", color = Color(0xFFE8C547))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                InAppWebPlayer(
+                    videoUrl = video.videoUrl,
+                    youtubeVideoId = videoId,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+                if (videoId != null) {
+                    Text(
+                        "Playback stays inside RykoCollection.",
+                        modifier = Modifier.padding(top = 9.dp, start = 2.dp),
+                        color = Color(0xFF9B9CA4),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun InAppWebPlayer(
+    videoUrl: String,
+    youtubeVideoId: String?,
+    modifier: Modifier = Modifier
+) {
+    val player = remember { mutableStateOf<WebView?>(null) }
+    AndroidView(
+        modifier = modifier.background(Color.Black),
+        factory = { context ->
+            WebView(context).apply {
+                setBackgroundColor(AndroidColor.BLACK)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.setSupportZoom(false)
+                webChromeClient = WebChromeClient()
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): Boolean {
+                        val scheme = request?.url?.scheme?.lowercase()
+                        return scheme != "https" && scheme != "http"
+                    }
+                }
+                player.value = this
+                if (youtubeVideoId != null) {
+                    val html = """
+                        <!doctype html>
+                        <html>
+                          <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                            <style>
+                              html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+                              iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+                            </style>
+                          </head>
+                          <body>
+                            <iframe
+                              src="https://www.youtube-nocookie.com/embed/$youtubeVideoId?playsinline=1&autoplay=0&rel=0"
+                              title="RykoCollection video player"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              referrerpolicy="strict-origin-when-cross-origin"
+                              allowfullscreen>
+                            </iframe>
+                          </body>
+                        </html>
+                    """.trimIndent()
+                    loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
+                } else {
+                    loadUrl(videoUrl)
+                }
+            }
+        },
+        update = { }
+    )
+    DisposableEffect(player.value) {
+        onDispose {
+            player.value?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                removeAllViews()
+                destroy()
+            }
+            player.value = null
         }
     }
 }
