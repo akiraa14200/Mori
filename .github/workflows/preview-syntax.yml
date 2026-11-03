@@ -1,7 +1,7 @@
 name: Preview syntax check
 on:
   push:
-    branches: [remove-footer-credits, main]
+    branches: [remove-footer-credits, main, catalogue-video-performance]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Run project regression tests
+        run: node --test tests/*.test.js
       - name: Check inline JavaScript in index.html
         run: |
           node --input-type=commonjs <<'NODE'
