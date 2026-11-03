@@ -1443,6 +1443,47 @@ async function loadCharacterSearchIndex(){
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=v=>{try{const u=new URL(v,location.href);return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return ''}};
 const img=(url,alt='')=>safeUrl(url)||'';
+/* Central image recovery: one handler for catalogue, entry, character, profile and video images. */
+const RYKO_IMAGE_PLACEHOLDER='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#252936"/><stop offset="1" stop-color="#11141c"/></linearGradient></defs><rect width="480" height="640" rx="28" fill="url(#g)"/><g fill="none" stroke="#8b94a8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity=".72"><rect x="145" y="220" width="190" height="150" rx="18"/><circle cx="205" cy="270" r="18"/><path d="m160 345 58-58 42 40 28-27 32 45"/></g><text x="240" y="430" fill="#aab2c2" font-family="Arial,sans-serif" font-size="24" text-anchor="middle" letter-spacing="5">RYKO</text></svg>');
+function handleRykoImageError(event){
+ const image=event.target;
+ if(!image||image.tagName!=='IMG')return;
+ event.stopImmediatePropagation();
+ image.removeAttribute('onerror');
+ if(image.closest('.footer-platform-logo')){image.hidden=true;return}
+ let fallbacks=[];
+ try{fallbacks=JSON.parse(image.dataset.fallbacks||'[]')}catch(error){}
+ while(fallbacks.length){
+  const next=safeUrl(fallbacks.shift());
+  if(next&&next!==image.src){image.dataset.fallbacks=JSON.stringify(fallbacks);image.dataset.rykoImageState='provider-fallback';image.src=next;return}
+ }
+ const state=image.dataset.rykoImageState||'';
+ const current=image.currentSrc||image.src||'';
+ if(state!=='proxy-tried'){
+  let parsed;
+  try{parsed=new URL(current,location.href)}catch(error){}
+  if(parsed&&['http:','https:'].includes(parsed.protocol)&&parsed.origin!==location.origin&&!/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/i.test(parsed.hostname)&&!/(^|\.)images\.weserv\.nl$/i.test(parsed.hostname)){
+   image.dataset.rykoImageState='proxy-tried';
+   image.dataset.rykoOriginalSrc=current;
+   image.src='https://images.weserv.nl/?url='+encodeURIComponent(parsed.host+parsed.pathname+parsed.search)+'&output=webp';
+   return;
+  }
+ }
+ if(state!=='placeholder'){
+  image.dataset.rykoImageState='placeholder';
+  image.dataset.fallbacks='[]';
+  image.classList.add('ryko-image-fallback');
+  image.alt=image.alt||'Image unavailable';
+  image.src=RYKO_IMAGE_PLACEHOLDER;
+  return;
+ }
+ image.hidden=true;
+}
+if(!window.__rykoCentralImageRecovery){
+ window.__rykoCentralImageRecovery=true;
+ document.addEventListener('error',handleRykoImageError,true);
+}
+
 const fmtDate=v=>v?new Date(v).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Recently added';
 function commentBodyMarkup(body){const safe=esc(body||'');return safe.replace(/(^|\s)@([a-zA-Z0-9_]{2,32})\b/g,(all,prefix,username)=>prefix+'<a class="comment-mention" href="#/profile/'+esc(username)+'">@'+esc(username)+'</a>')}
 function notify(msg){toastNode.textContent=msg;toastNode.classList.remove('hidden');clearTimeout(notify.timer);notify.timer=setTimeout(()=>toastNode.classList.add('hidden'),3200)}
