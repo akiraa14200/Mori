@@ -24,7 +24,7 @@ class CatalogueRepository {
                 require(offset >= 0) { "Page offset cannot be negative." }
                 val term = query.trim().take(80)
                 val page = (offset / limit) + 1
-                val key = "$term|$page|$limit"
+                val key = "$term|${'$'}page|$limit"
                 cache[key]?.takeIf { it.first > System.currentTimeMillis() }?.let {
                     return@withContext Result.success(it.second)
                 }
@@ -48,9 +48,9 @@ class CatalogueRepository {
     private fun requestMedia(type: String, search: String, page: Int, perPage: Int): List<CatalogueTitle> {
         val sort = if (search.isBlank()) "TRENDING_DESC" else "SEARCH_MATCH"
         val graphQl = """
-            query CataloguePage($page: Int!, $perPage: Int!, $type: MediaType!, $sort: [MediaSort]!, $search: String) {
-              Page(page: $page, perPage: $perPage) {
-                media(type: $type, sort: $sort, search: $search, isAdult: false) {
+            query CataloguePage(${'$'}page: Int!, ${'$'}perPage: Int!, ${'$'}type: MediaType!, ${'$'}sort: [MediaSort]!, ${'$'}search: String) {
+              Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+                media(type: ${'$'}type, sort: ${'$'}sort, search: ${'$'}search, isAdult: false) {
                   id title { romaji english native } description(asHtml: false)
                   coverImage { extraLarge large } bannerImage status seasonYear
                   averageScore genres format isAdult
