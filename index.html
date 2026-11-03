@@ -1505,25 +1505,31 @@ async function loadTitles({force=false}={}){
   }
   let publishedCount=0;
   const publish=()=>{setCatalogue(collected);publishedCount=collected.length};
+  const loadPage=async from=>{
+   let rows=[],clientError=null;
+   try{
+    const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',10000);
+    if(result.error)throw result.error;
+    rows=result.data||[];
+   }catch(error){clientError=error;console.warn('Catalogue page request failed; trying the REST fallback:',error)}
+   if(clientError||(!rows.length&&from===0)){
+    try{rows=await fetchTitlesRestPage(from);if(clientError)console.info('Catalogue page recovered through REST fallback.')}
+    catch(restError){throw new Error('Primary request: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
+   }
+   return rows;
+  };
   try{
-   for(let from=0;from<100000;from+=500){
-    let rows=[],clientError=null;
-    try{
-     const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',12000);
-     if(result.error)throw result.error;
-     rows=result.data||[];
-    }catch(error){clientError=error;console.warn('content service client catalogue request failed; trying the backup request:',error)}
-    if(clientError||!rows.length&&from===0){
-     try{rows=await fetchTitlesRestPage(from);if(clientError)console.info('Catalogue recovered through the backup request.')}
-     catch(restError){throw new Error('Primary request: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
-    }
-    collected.push(...rows);
-    // Publish the first page for a fast initial view, then batch all remaining
-    // pages into one final index/filter rebuild instead of rebuilding per page.
-    if(from===0)publish();
-
-    if(rows.length<500)break;
-    if(from+500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
+   const firstPage=await loadPage(0);
+   collected.push(...firstPage);
+   publish();
+   // Fetch later pages in small batches: faster than serial requests without
+   // creating a large burst against Supabase.
+   for(let from=500;from<100000;from+=1500){
+    const pages=await Promise.all([from,from+500,from+1000].map(loadPage));
+    let finished=false;
+    for(const rows of pages){collected.push(...rows);if(rows.length<500){finished=true;break}}
+    if(finished)break;
+    if(from+1500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
    }
    titlesLoadedAt=Date.now();
    if(collected.length){try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:collected}))}catch(error){console.warn('Could not save catalogue cache:',error)}}
@@ -1559,7 +1565,7 @@ async function fetchAniListTrending(){
  for(const row of payload.ids){let title=byAniId.get(row.id);if(!title)for(const name of row.names){title=byName.get(norm(name));if(title)break}if(title&&!seen.has(String(title.id))){seen.add(String(title.id));matched.push(title)}}
  if(matched.length){state.trendingTitles=matched;state.trendingSource='AniList trending charts';if(startupComplete&&(location.hash.replace(/^#/, '')||'/')==='/'){const section=document.getElementById('home-trending-section');if(section){section.innerHTML=topTitle('Trending This Week')+grid(state.trendingTitles.slice(0,12));bindPage()}}}
 }
-function searchScore(x,rawQuery){
+function searchScore(x,rawQuery,allowFuzzy=true){
  const q=RykoUtils.normalizeSearchText(rawQuery||'');if(!q)return {score:0,reasons:[]};
  const exact=(arr,w)=>arr.some(v=>v===w),starts=(arr,w)=>arr.some(v=>v.startsWith(w)),contains=(arr,w)=>arr.some(v=>v.includes(w));
  const titleNames=x.names||[],characterNames=x.characterNames||[],genreText=x.genreText||'';
@@ -1568,7 +1574,7 @@ function searchScore(x,rawQuery){
  if(exact(characterNames,q)){score=Math.max(score,95);reasons.push('Character match')}else if(starts(characterNames,q)){score=Math.max(score,75);reasons.push('Character match')}else if(contains(characterNames,q)){score=Math.max(score,60);reasons.push('Character match')}
  if(genreText.includes(q)){score=Math.max(score,35);reasons.push('Genre match')}
  // Small typo tolerance for names only. Avoid expensive fuzzy matching on very short queries.
- if(score===0&&q.length>=4){
+ if(allowFuzzy&&score===0&&q.length>=5){
   const distance=(a,b)=>{const prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let last=i-1;prev[0]=i;for(let j=1;j<=b.length;j++){const saved=prev[j],next=a[i-1]===b[j-1]?last:Math.min(last+1,prev[j]+1,prev[j-1]+1);prev[j]=next;last=saved}}return prev[b.length]};
   const fuzzy=[...titleNames,...characterNames].some(name=>name.length>=4&&distance(q,name)<=Math.max(1,Math.floor(Math.min(q.length,name.length)*0.2)));
   if(fuzzy){score=45;reasons.push('Close match')}
@@ -2398,7 +2404,7 @@ async function searchCatalogueSource(form){
  box.innerHTML='<div class="loading">Searching '+esc(provider)+'…</div>';
  try{
   const url='/api/catalogue-search?provider='+encodeURIComponent(provider)+'&q='+encodeURIComponent(q)+'&type='+encodeURIComponent(form.elements.media_type.value);
-  const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000),cache:'no-store'});
+  const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(9000),cache:'default'});
   const raw=await response.text();
   let payload;
   try{payload=JSON.parse(raw)}catch{const hint=response.status===401||response.status===403?'The API route may be blocked by deployment protection.':'The API route returned HTML or invalid JSON; check the deployed /api/catalogue-search function.';throw Error('HTTP '+response.status+'. '+hint+' Response: '+raw.slice(0,160).replace(/\\s+/g,' '))}
@@ -2461,14 +2467,14 @@ function showSearchSuggestions(){
  if(!searchInput||!searchSuggestions)return;
  const raw=searchInput.value.trim();
  if(raw.length<2){if(!raw)renderRecentSearches();else hideSearchSuggestions();return}
- const results=state.titleIndex.map(x=>{const match=searchScore(x,raw);return match.score?{t:x.t,score:match.score,reasons:match.reasons}:null}).filter(Boolean);
+ const results=state.titleIndex.map(x=>{const match=searchScore(x,raw,false);return match.score?{t:x.t,score:match.score,reasons:match.reasons}:null}).filter(Boolean);
  results.sort((a,b)=>b.score-a.score||Number(b.t.popularity||0)-Number(a.t.popularity||0)||Number(b.t.rating||0)-Number(a.t.rating||0));
  results.length=Math.min(results.length,7);
  if(!results.length){searchSuggestions.innerHTML='<div class="search-suggestion-empty">No matches yet. Press Enter to search the catalogue.</div>'}
  else searchSuggestions.innerHTML='<div class="search-suggestion-label">QUICK RESULTS</div>'+results.map(({t,reasons})=>'<button class="search-suggestion" type="button" role="option" data-search-open="'+esc(t.id)+'"><img src="'+esc(img(t.cover_url))+'" alt="" loading="lazy"><span class="search-suggestion-copy"><strong>'+esc(titleName(t))+'</strong><small>'+esc(media(t))+' · '+esc(t.release_year||'Year unknown')+(reasons.length?' · '+esc(reasons.join(', ')):'')+'</small></span><span class="search-suggestion-arrow">↗</span></button>').join('')+'<button class="search-all-results" type="button" data-search-all>See all results for “'+esc(raw)+'” →</button>';
  positionSearchSuggestions();searchSuggestions.classList.remove('hidden');searchInput.setAttribute('aria-expanded','true')
 }
-searchInput.addEventListener('focus',()=>showSearchSuggestions());window.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});searchInput.addEventListener('input',e=>{state.search=e.target.value;state.browsePage=1;showSearchSuggestions();clearTimeout(searchDebounce);searchDebounce=setTimeout(()=>{if(state.search.trim().length>=2&&!state.characterSearchLoaded)loadCharacterSearchIndex().then(()=>{if(searchInput.value.trim().length>=2)showSearchSuggestions()});applyFilters();if(!['/title/','/account','/admin','/news','/profile/'].some(x=>state.route.startsWith(x))){if(state.route==='/')render();else if(state.route==='/browse')render()}},180)});
+searchInput.addEventListener('focus',()=>showSearchSuggestions());window.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});window.visualViewport?.addEventListener('resize',()=>{if(!searchSuggestions.classList.contains('hidden'))positionSearchSuggestions()});searchInput.addEventListener('input',e=>{state.search=e.target.value;state.browsePage=1;showSearchSuggestions();clearTimeout(searchDebounce);searchDebounce=setTimeout(()=>{if(state.search.trim().length>=3&&!state.characterSearchLoaded&&!characterSearchPromise&&!state.titleIndex.some(x=>searchScore(x,state.search,false).score>0))loadCharacterSearchIndex().then(()=>{if(searchInput.value.trim().length>=3)showSearchSuggestions()});applyFilters();if(!['/title/','/account','/admin','/news','/profile/'].some(x=>state.route.startsWith(x))){if(state.route==='/')render();else if(state.route==='/browse')render()}},180)});
 searchInput.addEventListener('keydown',e=>{if(e.key==='Escape'){hideSearchSuggestions();return}if(e.key==='Enter'){e.preventDefault();saveSearch(searchInput.value);hideSearchSuggestions();location.hash='#/browse';render()}});
 searchSuggestions.addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault()});
 searchSuggestions.addEventListener('click',e=>{const item=e.target.closest('[data-search-open]');if(item){saveSearch(searchInput.value);hideSearchSuggestions();searchInput.blur();openTitle(item.dataset.searchOpen);return}const recent=e.target.closest('[data-search-recent]');if(recent){searchInput.value=recent.dataset.searchRecent;state.search=searchInput.value;searchInput.focus();showSearchSuggestions();return}if(e.target.closest('[data-search-all]')){saveSearch(searchInput.value);hideSearchSuggestions();location.hash='#/browse';render()}});
