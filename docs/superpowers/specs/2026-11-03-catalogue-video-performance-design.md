@@ -24,7 +24,7 @@ Improve RykoCollection's catalogue and video delivery so the public site stays r
 - Supabase project is `moicrqcddmftjgwjqkvz`; current public Worker URL is `https://mori-data.akiraa2007.workers.dev` (verify the configured hostname in `config.js` before wiring it).
 - The Worker D1 API already supports `/api/titles?limit=&offset=&q=&media_type=` and `/api/characters`.
 - Public video reads are allowed; writes must remain admin-only through RLS.
-- Existing saved data includes 8 title keys with 13 related-video URLs and 3 entry soundtrack records. Preserve all.
+- Existing saved data includes 8 title keys with 14 related-video URLs, including 2 URLs whose title rows no longer exist and 3 entry soundtrack records. Preserve all.
 - Existing soundtrack metadata is stored under `site_settings.entry_music`; do not migrate or rewrite it.
 
 ## Approaches considered
@@ -36,7 +36,7 @@ Improve RykoCollection's catalogue and video delivery so the public site stays r
 Use option 2. Keep a compatibility fallback to legacy JSON for reads during rollout, migrate URLs idempotently, and only retire legacy reads after database verification. Public catalogue requests use the Worker with direct Supabase fallback; admin flows continue reading/writing Supabase. Videos feed and per-entry clips use paginated Supabase queries and click-to-load embeds. The music header remains visible while the detailed player is collapsed until expanded.
 
 ## Acceptance criteria
-- All 13 legacy video URLs appear in the new table exactly once and remain visible.
+- All 14 legacy video URLs are preserved in the new table exactly once; 12 link to active titles and 2 are retained as orphaned legacy records for missing title IDs.
 - Admin can add, edit, reorder, and remove a title's related videos; non-admin writes are rejected by RLS.
 - Videos feed initially renders a bounded page and loads subsequent pages without duplicates.
 - Public catalogue initial request is bounded; Browse can request more entries; if Worker fails, direct Supabase fallback keeps the site usable.
