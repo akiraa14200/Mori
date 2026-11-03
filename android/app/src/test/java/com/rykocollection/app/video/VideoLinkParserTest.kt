@@ -21,6 +21,14 @@ class VideoLinkParserTest {
     }
 
     @Test
+    fun extractsIdFromPrivacyEnhancedEmbedUrl() {
+        assertEquals(
+            "abc123XYZ_0",
+            VideoLinkParser.youtubeVideoId("https://www.youtube-nocookie.com/embed/abc123XYZ_0")
+        )
+    }
+
+    @Test
     fun rejectsNonYouTubeAndMalformedLinks() {
         assertNull(VideoLinkParser.youtubeVideoId("https://www.instagram.com/reel/example"))
         assertNull(VideoLinkParser.youtubeVideoId("https://youtube.com/watch"))
