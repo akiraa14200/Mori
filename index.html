@@ -2549,6 +2549,7 @@ async function searchCatalogueSource(form){
    window.pendingAniCharacters=[];
    const status=form.querySelector('#admin-status');
    status.textContent='Metadata loaded. Review the imported fields, then save the entry.';
+   activateAdminWorkspace('editor',false);
    form.scrollIntoView({behavior:'smooth',block:'start'});
    if(['Anime','Manga','Manhwa','Manhua'].includes(item.media_type || f.media_type.value)){
     status.textContent='Metadata loaded. Looking up optional character details from AniList…';
