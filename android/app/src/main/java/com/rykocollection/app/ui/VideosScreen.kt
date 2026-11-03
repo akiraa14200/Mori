@@ -1,11 +1,5 @@
 package com.rykocollection.app.ui
 
-import android.annotation.SuppressLint
-import android.graphics.Color as AndroidColor
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +13,12 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -280,106 +280,94 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun InAppWebPlayer(
     videoUrl: String,
     youtubeVideoId: String?,
     modifier: Modifier = Modifier
 ) {
-    val playerRef = remember { arrayOfNulls<WebView>(1) }
-    AndroidView(
-        modifier = modifier.background(Color.Black),
-        factory = { context ->
-            WebView(context).apply {
-                setBackgroundColor(AndroidColor.BLACK)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.mediaPlaybackRequiresUserGesture = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                settings.setSupportZoom(false)
-                webChromeClient = WebChromeClient()
-                settings.javaScriptCanOpenWindowsAutomatically = false
-                settings.setSupportMultipleWindows(false)
-                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                webViewClient = object : WebViewClient() {
-                    private fun handleNavigation(view: WebView?, rawUrl: String): Boolean {
-                        val uri = runCatching { android.net.Uri.parse(rawUrl) }.getOrNull() ?: return true
-                        val host = uri.host?.lowercase()?.removePrefix("www.").orEmpty()
-                        val isYoutubeHost = host == "youtube.com" ||
-                            host == "m.youtube.com" ||
-                            host == "youtu.be" ||
-                            host == "youtube-nocookie.com" ||
-                            host == "m.youtube-nocookie.com"
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var playerView by remember { mutableStateOf<YouTubePlayerView?>(null) }
+    var youTubePlayer by remember { mutableStateOf<YouTubePlayer?>(null) }
+    var playerError by remember(youtubeVideoId) { mutableStateOf<String?>(null) }
 
-                        if (isYoutubeHost) {
-                            val isEmbed = host.contains("youtube-nocookie.com") &&
-                                uri.path.orEmpty().startsWith("/embed/")
-                            if (isEmbed) return false
+    Column(modifier) {
+        if (youtubeVideoId == null) {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "This video link is not a supported YouTube URL.",
+                    color = Color(0xFFB8B8BE),
+                    modifier = Modifier.padding(18.dp)
+                )
+            }
+        } else {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
+                factory = { viewContext ->
+                    YouTubePlayerView(viewContext).apply {
+                        enableAutomaticInitialization = false
+                        lifecycleOwner.lifecycle.addObserver(this)
 
-                            val id = VideoLinkParser.youtubeVideoId(rawUrl)
-                            if (id != null) {
-                                view?.loadUrl(
-                                    "https://www.youtube-nocookie.com/embed/$id?playsinline=1&autoplay=0&rel=0"
-                                )
-                            }
-                            // Never hand YouTube navigation to Android or an external app.
-                            return true
-                        }
+                        val options = IFramePlayerOptions.Builder(viewContext)
+                            .controls(1)
+                            .fullscreen(0)
+                            .autoplay(0)
+                            .build()
 
-                        return uri.scheme == "https" || uri.scheme == "http"
+                        initialize(
+                            object : AbstractYouTubePlayerListener() {
+                                override fun onReady(player: YouTubePlayer) {
+                                    youTubePlayer = player
+                                    playerError = null
+                                    // Cue first. The user starts playback with the official
+                                    // YouTube controls, avoiding blocked WebView autoplay.
+                                    player.cueVideo(youtubeVideoId, 0f)
+                                }
+
+                                override fun onError(
+                                    player: YouTubePlayer,
+                                    error: PlayerConstants.PlayerError
+                                ) {
+                                    playerError = when (error) {
+                                        PlayerConstants.PlayerError.VIDEO_NOT_FOUND ->
+                                            "This video could not be found."
+                                        PlayerConstants.PlayerError.VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER ->
+                                            "The video owner does not allow in-app playback."
+                                        else -> "YouTube player error: $error"
+                                    }
+                                }
+                            },
+                            options
+                        )
+                        playerView = this
                     }
+                },
+                update = { }
+            )
 
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?
-                    ): Boolean = handleNavigation(view, request?.url?.toString().orEmpty())
-
-                    @Suppress("DEPRECATION")
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
-                        handleNavigation(view, url.orEmpty())
-                }
-                playerRef[0] = this
-                if (youtubeVideoId != null) {
-                    val html = """
-                        <!doctype html>
-                        <html>
-                          <head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-                            <style>
-                              html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
-                              iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-                            </style>
-                          </head>
-                          <body>
-                            <iframe
-                              src="https://www.youtube-nocookie.com/embed/$youtubeVideoId?playsinline=1&autoplay=0&rel=0&enablejsapi=1&origin=https%3A%2F%2Frykocollection.vercel.app"
-                              title="RykoCollection video player"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                              referrerpolicy="origin"
-                              allowfullscreen>
-                            </iframe>
-                          </body>
-                        </html>
-                    """.trimIndent()
-                    loadDataWithBaseURL("https://rykocollection.vercel.app/", html, "text/html", "UTF-8", null)
-                } else {
-                    loadUrl(videoUrl)
-                }
+            playerError?.let { message ->
+                Text(
+                    message,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp, end = 4.dp),
+                    color = Color(0xFFFFB4AB),
+                    fontSize = 12.sp
+                )
             }
-        },
-        update = { }
-    )
-    DisposableEffect(videoUrl, youtubeVideoId) {
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, playerView) {
         onDispose {
-            playerRef[0]?.apply {
-                stopLoading()
-                loadUrl("about:blank")
-                removeAllViews()
-                destroy()
+            playerView?.let { view ->
+                lifecycleOwner.lifecycle.removeObserver(view)
+                view.release()
             }
-            playerRef[0] = null
+            playerView = null
+            youTubePlayer = null
         }
     }
 }
