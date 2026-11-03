@@ -39,6 +39,7 @@ import com.rykocollection.app.data.VideoRepository
 import com.rykocollection.app.model.RelatedVideo
 import com.rykocollection.app.video.VideoLinkParser
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
 
 @Composable
 fun VideosScreen() {
@@ -262,7 +263,6 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 InAppWebPlayer(
-                    videoUrl = video.videoUrl,
                     youtubeVideoId = videoId,
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(12.dp))
@@ -282,7 +282,6 @@ private fun InAppVideoDialog(video: RelatedVideo, onDismiss: () -> Unit) {
 
 @Composable
 private fun InAppWebPlayer(
-    videoUrl: String,
     youtubeVideoId: String?,
     modifier: Modifier = Modifier
 ) {
@@ -291,6 +290,16 @@ private fun InAppWebPlayer(
     var playerView by remember { mutableStateOf<YouTubePlayerView?>(null) }
     var youTubePlayer by remember { mutableStateOf<YouTubePlayer?>(null) }
     var playerError by remember(youtubeVideoId) { mutableStateOf<String?>(null) }
+    var playerReady by remember(youtubeVideoId) { mutableStateOf(false) }
+
+    LaunchedEffect(youtubeVideoId, playerReady) {
+        if (youtubeVideoId != null && !playerReady) {
+            delay(15_000)
+            if (!playerReady && playerError == null) {
+                playerError = "YouTube player did not respond. Check your connection and try again."
+            }
+        }
+    }
 
     Column(modifier) {
         if (youtubeVideoId == null) {
@@ -305,8 +314,12 @@ private fun InAppWebPlayer(
                 )
             }
         } else {
-            AndroidView(
+            Box(
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
                 factory = { viewContext ->
                     YouTubePlayerView(viewContext).apply {
                         enableAutomaticInitialization = false
@@ -322,6 +335,7 @@ private fun InAppWebPlayer(
                             object : AbstractYouTubePlayerListener() {
                                 override fun onReady(player: YouTubePlayer) {
                                     youTubePlayer = player
+                                    playerReady = true
                                     playerError = null
                                     // Cue first. The user starts playback with the official
                                     // YouTube controls, avoiding blocked WebView autoplay.
@@ -348,6 +362,10 @@ private fun InAppWebPlayer(
                 },
                 update = { }
             )
+            if (!playerReady && playerError == null) {
+                CircularProgressIndicator(color = Color(0xFFE8C547), strokeWidth = 2.dp)
+            }
+            }
 
             playerError?.let { message ->
                 Text(
