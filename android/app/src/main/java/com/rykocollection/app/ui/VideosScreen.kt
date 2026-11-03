@@ -368,14 +368,6 @@ private fun InAppWebPlayer(
                             settings.allowContentAccess = false
                             webChromeClient = WebChromeClient()
                             webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView, url: String) {
-                                    super.onPageFinished(view, url)
-                                    // The Kairo/comic player uses a plain privacy-enhanced iframe.
-                                    // Treat the local wrapper page as loaded; iframe errors/timeouts
-                                    // are handled separately rather than waiting for the IFrame API.
-                                    if (pageLoading && playerError == null) pageLoading = false
-                                }
-
                                 override fun onReceivedError(
                                     view: WebView,
                                     request: WebResourceRequest,
@@ -435,7 +427,7 @@ private fun InAppWebPlayer(
                                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                       referrerpolicy="strict-origin-when-cross-origin"
                                       allowfullscreen
-                                      onload="if (window.RykoBridge) RykoBridge.playerReady();">
+                                      >
                                     </iframe>
                                   </body>
                                 </html>
