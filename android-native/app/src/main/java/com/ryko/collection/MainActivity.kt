@@ -10,6 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -373,37 +376,31 @@ private fun Catalogue(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(if (error.isBlank()) empty else "Catalogue unavailable. Try again.", color = Muted)
         }
-    } else LazyColumn(
-        Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(data) { title -> TitleCard(title, { onSelect(title) }, Modifier.fillMaxWidth()) }
+    } else LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        gridItems(data) { title -> TitleCard(title, { onSelect(title) }, Modifier.fillMaxWidth()) }
     }
 }
 
 @Composable
 private fun TitleCard(title: RykoTitle, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.clickable(onClick = onClick), shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Panel)) {
-        Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (title.cover.isNotBlank()) AsyncImage(
-                model = title.cover, contentDescription = title.name,
-                modifier = Modifier.width(82.dp).height(112.dp)
-            ) else Box(
-                Modifier.width(82.dp).height(112.dp).background(Color(0xFF252B38), RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.CollectionsBookmark, null, tint = Gold) }
-            Column(Modifier.weight(1f)) {
-                Text(title.name, color = White, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("${title.type} • ${title.year ?: "—"}", color = Gold, fontSize = 11.sp)
-                Spacer(Modifier.height(5.dp))
-                Text(title.synopsis.ifBlank { "Discover this title in Ryko Collection." }, color = Muted,
-                    fontSize = 11.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.weight(1f))
-                Text("${title.status} • ${title.rating?.let { "★ $it" } ?: "Explore"}", color = Gold, fontSize = 10.sp)
+    Column(modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Box {
+            if (title.cover.isNotBlank()) AsyncImage(model = title.cover, contentDescription = title.name,
+                modifier = Modifier.fillMaxWidth().height(218.dp).background(Panel, RoundedCornerShape(16.dp)))
+            else Box(Modifier.fillMaxWidth().height(218.dp).background(Panel, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.CollectionsBookmark, null, tint = Gold, modifier = Modifier.size(36.dp))
+            }
+            Surface(color = Color(0xDD171923), shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.TopStart).padding(7.dp)) {
+                Text(title.type.uppercase(), color = White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+            }
+            if (!title.rating.isNullOrBlank()) Surface(color = Color(0xDD171923), shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.TopEnd).padding(7.dp)) {
+                Text("★ ${title.rating}", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
             }
         }
+        Text(title.name, color = White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text("${title.year ?: "Year unknown"}  ·  ${title.status}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
