@@ -1,6 +1,6 @@
 const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Content-Type,Authorization,X-Sync-Secret','Access-Control-Max-Age':'86400'};
 const json=(data,status=200,cacheControl='no-store')=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':cacheControl,...CORS}});
-const PUBLIC_CACHE='public, max-age=60, s-maxage=300, stale-while-revalidate=3600';
+const PUBLIC_CACHE='public, max-age=30, s-maxage=60, stale-while-revalidate=300';
 async function cachedJson(request,data){
  const cacheKey=new Request(new URL(request.url).toString(),{method:'GET'});
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
