@@ -28,7 +28,7 @@ data class RykoTitle(
     val chapters: String = "", val episodes: String = "", val author: String = "",
     val artist: String = "", val studio: String = "", val country: String = "",
     val trailerUrl: String = "", val banner: String = "", val season: String = "",
-    val sourceUrl: String = "", val featured: Boolean = false, val trending: Boolean = false
+    val sourceUrl: String = "", val featured: Boolean = false, val trending: Boolean = false, val anilistId: Int? = null
 )
 data class RykoCharacter(val id: String, val titleId: String, val name: String, val role: String, val description: String, val image: String)
 
@@ -73,7 +73,7 @@ class Backend(context: Context) {
 
     suspend fun loadTitles(search: String = ""): List<RykoTitle> {
         val filter = if (search.isBlank()) "" else "&name=ilike.*${enc(search)}*"
-        val raw = request("/rest/v1/titles?select=id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&order=popularity.desc&limit=60$filter", auth = false)
+        val raw = request("/rest/v1/titles?select=id,name,anilist_id,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&order=popularity.desc&limit=60$filter", auth = false)
         val arr = JSONArray(raw)
         return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
     }
@@ -90,6 +90,23 @@ class Backend(context: Context) {
                 creatorAvatarUrl = v.optString("creator_avatar_url"), actionType = v.optString("action_type"),
                 actionUrl = v.optString("action_url"), sortOrder = v.optInt("sort_order")
             )
+        }
+    }
+
+    suspend fun loadAniListTrailer(anilistId: Int): String? = withContext(Dispatchers.IO) {
+        val query = """query ($id:Int){Media(id:$id,type:ANIME){trailer{id site}}}"""
+        val payload = JSONObject().put("query", query).put("variables", JSONObject().put("id", anilistId))
+        val request = Request.Builder().url("https://graphql.anilist.co")
+            .post(payload.toString().toRequestBody(JSON))
+            .addHeader("Content-Type", "application/json").addHeader("Accept", "application/json").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val trailer = JSONObject(response.body?.string().orEmpty()).optJSONObject("data")
+                ?.optJSONObject("Media")?.optJSONObject("trailer") ?: return@withContext null
+            if (!trailer.optString("site").equals("youtube", true)) return@withContext null
+            val id = trailer.optString("id")
+            if (!id.matches(Regex("^[A-Za-z0-9_-]{11}$"))) return@withContext null
+            "https://www.youtube.com/watch?v=$id"
         }
     }
 
@@ -128,7 +145,7 @@ class Backend(context: Context) {
         if (ids.length() == 0) return emptyList()
         val joined = (0 until ids.length()).map { ids.getJSONObject(it).getString("title_id") }
             .joinToString(",") { "\"$it\"" }
-        val titles = request("/rest/v1/titles?select=id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&id=in.${enc("($joined)")}&order=popularity.desc")
+        val titles = request("/rest/v1/titles?select=id,name,anilist_id,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&id=in.${enc("($joined)")}&order=popularity.desc")
         val arr = JSONArray(titles)
         return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
     }
@@ -168,7 +185,7 @@ class Backend(context: Context) {
         chapters = optString("chapters"), episodes = optString("episodes"), author = optString("author"),
         artist = optString("artist"), studio = optString("studio"), country = optString("country"),
         trailerUrl = optString("trailer_url"), banner = optString("banner_url"), season = optString("season"),
-        sourceUrl = optString("source_url"), featured = optBoolean("is_featured"), trending = optBoolean("is_trending")
+        sourceUrl = optString("source_url"), featured = optBoolean("is_featured"), trending = optBoolean("is_trending"), anilistId = if (isNull("anilist_id")) null else optInt("anilist_id")
     )
     private fun JSONArray?.toStringList(): List<String> {
         if (this == null) return emptyList()
