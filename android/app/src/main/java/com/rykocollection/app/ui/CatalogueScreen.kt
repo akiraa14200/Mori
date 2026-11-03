@@ -34,6 +34,7 @@ import kotlinx.coroutines.isActive
 @Composable
 fun CatalogueScreen(
     search: String,
+    onSearchChange: (String) -> Unit,
     onTitleSelected: (CatalogueTitle) -> Unit
 ) {
     val repository = remember { CatalogueRepository() }
@@ -91,12 +92,11 @@ fun CatalogueScreen(
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = search,
-            onValueChange = { /* The parent owns search state. */ },
+            onValueChange = onSearchChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
             placeholder = { Text("Search manga, manhwa, anime...") },
             leadingIcon = { Icon(Icons.Rounded.Search, null) },
             singleLine = true,
-            readOnly = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFFE8C547),
