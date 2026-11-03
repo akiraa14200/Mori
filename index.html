@@ -1478,13 +1478,15 @@ function setCatalogue(rows){
  state.heroTitles=state.titles.slice().sort((a,b)=>Number(!!b.is_featured)-Number(!!a.is_featured)||Number(!!b.is_trending)-Number(!!a.is_trending)||new Date(b.created_at||0)-new Date(a.created_at||0));
  applyFilters();
 }
-async function fetchTitlesRestPage(from){
- const url=new URL(cfg.supabaseUrl.replace(/\/$/,'')+'/rest/v1/titles');
+const CATALOGUE_PAGE_SIZE=250;
+let catalogueOffset=0,catalogueHasMore=false,catalogueLoading=false,remoteSearchLast='';
+async function fetchTitlesRestPage(from,limit=CATALOGUE_PAGE_SIZE){
+ const url=new URL(cfg.supabaseUrl.replace(/\\/$/,'')+'/rest/v1/titles');
  url.searchParams.set('select','*');
  url.searchParams.set('order','created_at.desc,id.asc');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
  try{
-  const response=await fetch(url.toString(),{method:'GET',headers:{apikey:cfg.supabaseKey,Authorization:'Bearer '+cfg.supabaseKey,Range:from+'-'+(from+499),'Range-Unit':'items'},signal:controller.signal,cache:'no-store'});
+  const response=await fetch(url.toString(),{method:'GET',headers:{apikey:cfg.supabaseKey,Authorization:'Bearer '+cfg.supabaseKey,Range:from+'-'+(from+limit-1),'Range-Unit':'items'},signal:controller.signal,cache:'no-store'});
   const body=await response.text();
   if(!response.ok)throw new Error('Content service HTTP '+response.status+': '+body.slice(0,350));
   let rows;try{rows=JSON.parse(body)}catch{throw new Error('Content service returned invalid data: '+body.slice(0,180))}
@@ -1492,58 +1494,86 @@ async function fetchTitlesRestPage(from){
   return rows;
  }finally{clearTimeout(timer)}
 }
+async function fetchCataloguePage(offset=0,query=''){
+ if(!state.admin&&cfg.cloudflareD1Url){
+  try{
+   const url=new URL(cfg.cloudflareD1Url.replace(/\\/$/,'')+'/api/titles');
+   url.searchParams.set('limit',String(CATALOGUE_PAGE_SIZE));url.searchParams.set('offset',String(offset));
+   if(query)url.searchParams.set('q',query);
+   const response=await fetch(url.toString(),{headers:{Accept:'application/json'},signal:AbortSignal.timeout(10000),cache:'no-store'});
+   if(!response.ok)throw new Error('Public catalogue cache HTTP '+response.status);
+   const payload=await response.json();
+   if(!Array.isArray(payload.data))throw new Error('Public catalogue cache returned an invalid page');
+   return payload.data;
+  }catch(error){console.warn('Cloudflare catalogue cache unavailable; using Supabase:',error.message)}
+ }
+ const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(offset,offset+CATALOGUE_PAGE_SIZE-1),'Catalogue database page',10000);
+ if(result.error)throw result.error;
+ return result.data||[];
+}
+async function loadMoreCatalogue(){
+ if(catalogueLoading||!catalogueHasMore)return state.titles;
+ catalogueLoading=true;
+ try{
+  const rows=await fetchCataloguePage(catalogueOffset);
+  const known=new Set(state.titles.map(t=>String(t.id)));
+  const fresh=rows.filter(t=>!known.has(String(t.id)));
+  if(fresh.length){setCatalogue([...state.titles,...fresh]);catalogueOffset+=rows.length}
+  catalogueHasMore=rows.length===CATALOGUE_PAGE_SIZE;
+  try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:state.titles}))}catch(error){console.warn('Could not update saved catalogue cache:',error)}
+  if(startupComplete&&state.route==='/browse')render(true);
+ }catch(error){console.error('Could not load next catalogue page:',error);notify('Could not load more catalogue entries. Please try again.')}
+ finally{catalogueLoading=false}
+ return state.titles;
+}
+async function searchCatalogueRemotely(query){
+ const q=String(query||'').trim();
+ if(state.admin||!cfg.cloudflareD1Url||q.length<2||q===remoteSearchLast)return;
+ remoteSearchLast=q;
+ try{
+  const rows=await fetchCataloguePage(0,q);
+  if(!rows.length||state.search.trim()!==q)return;
+  const known=new Set(state.titles.map(t=>String(t.id)));
+  const fresh=rows.filter(t=>!known.has(String(t.id)));
+  if(fresh.length){setCatalogue([...state.titles,...fresh]);showSearchSuggestions();if(state.route==='/browse')render(true)}
+ }catch(error){console.warn('Remote catalogue search unavailable:',error.message)}
+}
 async function loadTitles({force=false}={}){
+ if(force&&titlesLoadPromise){try{await titlesLoadPromise}catch{}}
  if(!force&&titlesLoadPromise)return titlesLoadPromise;
  if(!force&&state.titles.length&&Date.now()-titlesLoadedAt<TITLES_CACHE_TTL)return state.titles;
  titlesLoadPromise=(async()=>{
-  const collected=[];
-  // Render a recent saved catalogue immediately, then refresh it from content service.
   if(!force&&!state.titles.length){
    try{
     const cached=JSON.parse(localStorage.getItem(TITLES_STORAGE_CACHE_KEY)||'null');
-    if(Array.isArray(cached?.titles)&&cached.titles.length&&Date.now()-Number(cached.savedAt||0)<TITLES_STORAGE_CACHE_TTL)setCatalogue(cached.titles);
+    if(Array.isArray(cached?.titles)&&cached.titles.length&&Date.now()-Number(cached.savedAt||0)<TITLES_STORAGE_CACHE_TTL){
+     setCatalogue(cached.titles);catalogueOffset=cached.titles.length;catalogueHasMore=cached.titles.length===CATALOGUE_PAGE_SIZE;
+    }
    }catch(error){console.warn('Saved catalogue cache unavailable:',error)}
   }
-  let publishedCount=0;
-  const publish=()=>{setCatalogue(collected);publishedCount=collected.length};
-  const loadPage=async from=>{
-   let rows=[],clientError=null;
-   try{
-    const result=await withTimeout(db.from('titles').select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(from,from+499),'Catalogue database page',10000);
-    if(result.error)throw result.error;
-    rows=result.data||[];
-   }catch(error){clientError=error;console.warn('Catalogue page request failed; trying the REST fallback:',error)}
-   if(clientError||(!rows.length&&from===0)){
-    try{rows=await fetchTitlesRestPage(from);if(clientError)console.info('Catalogue page recovered through REST fallback.')}
-    catch(restError){throw new Error('Primary request: '+(clientError?.message||'empty response')+'; REST fallback: '+(restError.message||String(restError)))}
-   }
-   return rows;
-  };
   try{
-   const firstPage=await loadPage(0);
-   collected.push(...firstPage);
-   publish();
-   // Fetch later pages in small batches: faster than serial requests without
-   // creating a large burst against Supabase.
-   for(let from=500;firstPage.length===500&&from<100000;from+=1500){
-    const pages=await Promise.all([from,from+500,from+1000].map(loadPage));
-    let finished=false;
-    for(const rows of pages){collected.push(...rows);if(rows.length<500){finished=true;break}}
-    if(finished)break;
-    if(from+1500>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
+   if(state.admin){
+    const collected=[];
+    for(let offset=0;offset<100000;offset+=CATALOGUE_PAGE_SIZE){
+     const rows=await fetchCataloguePage(offset);
+     collected.push(...rows);
+     if(rows.length<CATALOGUE_PAGE_SIZE)break;
+     if(offset+CATALOGUE_PAGE_SIZE>=100000)throw new Error('Catalogue exceeded the safety pagination limit');
+    }
+    setCatalogue(collected);catalogueOffset=collected.length;catalogueHasMore=false;
+   }else{
+    const firstPage=await fetchCataloguePage(0);
+    setCatalogue(firstPage);catalogueOffset=firstPage.length;catalogueHasMore=firstPage.length===CATALOGUE_PAGE_SIZE;
    }
    titlesLoadedAt=Date.now();
-   if(collected.length){try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:collected}))}catch(error){console.warn('Could not save catalogue cache:',error)}}
-   if(!collected.length)notify('The database responded, but no public catalogue entries were returned.');
+   if(state.titles.length){try{localStorage.setItem(TITLES_STORAGE_CACHE_KEY,JSON.stringify({savedAt:Date.now(),titles:state.titles}))}catch(error){console.warn('Could not save catalogue cache:',error)}}
+   if(!state.titles.length)notify('The database responded, but no public catalogue entries were returned.');
   }catch(error){
    console.error('Catalogue loading failed:',error);
    titlesLoadedAt=0;
-   const detail=[error.message,error.code,error.details,error.hint].filter(Boolean).join(' · ');
    if(state.titles.length)notify('Could not refresh the catalogue. Showing the most recently saved entries.');
    else notify('Could not load entries. Please check your connection and retry.');
   }
-  // Rebuild once after pagination (or publish any partial result after a failure).
-  if(collected.length!==publishedCount)publish();
   if(state.titles.length)fetchAniListTrending().catch(e=>console.warn('External trending source unavailable; using catalogue fallback.',e));
   if(startupComplete)render(true);
   return state.titles;
