@@ -1,6 +1,6 @@
 const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Content-Type,Authorization,X-Sync-Secret','Access-Control-Max-Age':'86400'};
 const json=(data,status=200,cacheControl='no-store')=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':cacheControl,...CORS}});
-const PUBLIC_CACHE='public, max-age=60, s-maxage=300, stale-while-revalidate=3600';
+const PUBLIC_CACHE='public, max-age=30, s-maxage=60, stale-while-revalidate=300';
 async function cachedJson(request,data){
  const cacheKey=new Request(new URL(request.url).toString(),{method:'GET'});
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
@@ -12,7 +12,8 @@ const arr=v=>Array.isArray(v)?JSON.stringify(v):'[]',flag=v=>v?1:0,safeJson=v=>{
 async function fetchAll(env,table,columns){const out=[];for(let offset=0;offset<100000;offset+=500){const url=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+table+'?select='+encodeURIComponent(columns)+'&order=id.asc';const res=await fetch(url,{headers:{apikey:env.SUPABASE_KEY,Authorization:'Bearer '+env.SUPABASE_KEY,Range:offset+'-'+(offset+499),'Range-Unit':'items'}});if(!res.ok)throw new Error('Supabase '+table+' read failed: HTTP '+res.status+' '+(await res.text()).slice(0,200));const rows=await res.json();out.push(...rows);if(rows.length<500)return out;}throw new Error('Safety limit reached while syncing '+table);}
 async function syncCatalog(env){
  const runId=crypto.randomUUID(),now=new Date().toISOString();
- const [titles,characters]=await Promise.all([fetchAll(env,'titles','id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at'),fetchAll(env,'characters','id,title_id,name,role,description,image_url,created_at')]);
+ try{await env.DB.prepare('ALTER TABLE titles ADD COLUMN read_url TEXT').run()}catch(error){if(!/duplicate column name/i.test(String(error&&error.message||error)))throw error}
+ const [titles,characters]=await Promise.all([fetchAll(env,'titles','id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,read_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at'),fetchAll(env,'characters','id,title_id,name,role,description,image_url,created_at')]);
  if(!titles.length)throw new Error('Sync aborted: source catalogue is empty; existing D1 data preserved.');
  // An empty character response is suspicious when the cache already contains character records.
  // Preserve the previous character cache instead of silently deleting every profile on a transient upstream failure.
@@ -24,11 +25,11 @@ async function syncCatalog(env){
   env.DB.prepare('CREATE TABLE titles_stage AS SELECT * FROM titles WHERE 0'),
   env.DB.prepare('CREATE TABLE characters_stage AS SELECT * FROM characters WHERE 0')
  ]);
- const titleColumns='id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at,synced_at,sync_run_id';
+ const titleColumns='id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,source_url,read_url,anilist_id,trailer_url,is_trending,is_featured,created_at,updated_at,synced_at,sync_run_id';
  const characterColumns='id,title_id,name,role,description,image_url,created_at,synced_at,sync_run_id';
- const tq='INSERT INTO titles_stage('+titleColumns+') VALUES('+Array(29).fill('?').join(',')+')';
+ const tq='INSERT INTO titles_stage('+titleColumns+') VALUES('+Array(30).fill('?').join(',')+')';
  const cq='INSERT INTO characters_stage('+characterColumns+') VALUES('+Array(9).fill('?').join(',')+')';
- for(let i=0;i<titles.length;i+=25)await env.DB.batch(titles.slice(i,i+25).map(t=>env.DB.prepare(tq).bind(t.id,t.name,arr(t.alternative_names),t.media_type,t.synopsis||'',t.cover_url||'',t.banner_url||'',arr(t.genres),arr(t.themes),t.status||'Ongoing',t.release_year??null,t.season??null,t.rating??null,t.popularity??0,t.chapters??null,t.episodes??null,t.author??null,t.artist??null,t.studio??null,t.country??null,t.source_url??null,t.anilist_id??null,t.trailer_url??null,flag(t.is_trending),flag(t.is_featured),t.created_at??null,t.updated_at??null,now,runId)));
+ for(let i=0;i<titles.length;i+=25)await env.DB.batch(titles.slice(i,i+25).map(t=>env.DB.prepare(tq).bind(t.id,t.name,arr(t.alternative_names),t.media_type,t.synopsis||'',t.cover_url||'',t.banner_url||'',arr(t.genres),arr(t.themes),t.status||'Ongoing',t.release_year??null,t.season??null,t.rating??null,t.popularity??0,t.chapters??null,t.episodes??null,t.author??null,t.artist??null,t.studio??null,t.country??null,t.source_url??null,t.read_url??null,t.anilist_id??null,t.trailer_url??null,flag(t.is_trending),flag(t.is_featured),t.created_at??null,t.updated_at??null,now,runId)));
  for(let i=0;i<characters.length;i+=25)await env.DB.batch(characters.slice(i,i+25).map(c=>env.DB.prepare(cq).bind(c.id,c.title_id,c.name,c.role||'Supporting',c.description||'',c.image_url||'',c.created_at??null,now,runId)));
  // D1 batch is transactional: publish both tables together only after staging is complete.
  await env.DB.batch([
