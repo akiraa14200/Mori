@@ -1,11 +1,13 @@
 package com.rykocollection.app.data
 
 import com.rykocollection.app.model.CatalogueTitle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.selects.select
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -22,64 +24,81 @@ class CatalogueRepository {
         limit: Int = 30,
         offset: Int = 0
     ): Result<List<CatalogueTitle>> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             require(limit in 1..100) { "Page size must be between 1 and 100." }
             require(offset >= 0) { "Page offset cannot be negative." }
 
-            // Start both sources together. A slow/unavailable worker must not prevent
-            // the database fallback from making progress.
-            coroutineScope {
-                val worker = async { runCatching { fetchFromWorker(query, limit, offset) } }
-                val database = async { runCatching { fetchFromSupabase(query, limit, offset) } }
-                val results = awaitAll(worker, database)
-                val workerResult = results[0]
-                val databaseResult = results[1]
+            withTimeout(15_000) {
+                coroutineScope {
+                    // Race the public D1 cache and Supabase. Return the first non-empty
+                    // successful page rather than waiting for a slow secondary source.
+                    val worker = async { capture { fetchFromWorker(query, limit, offset) } }
+                    val database = async { capture { fetchFromSupabase(query, limit, offset) } }
+                    try {
+                        val first = select<Pair<Boolean, Result<List<CatalogueTitle>>>> {
+                            worker.onAwait { true to it }
+                            database.onAwait { false to it }
+                        }
+                        first.second.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@coroutineScope it }
 
-                workerResult.getOrNull()?.takeIf { it.isNotEmpty() }
-                    ?: databaseResult.getOrNull()?.takeIf { it.isNotEmpty() }
-                    ?: when {
-                        workerResult.isFailure && databaseResult.isFailure -> {
-                            throw IllegalStateException(
-                                "Catalogue sources failed. Cache: ${workerResult.exceptionOrNull()?.message}; " +
-                                    "database: ${databaseResult.exceptionOrNull()?.message}",
-                                workerResult.exceptionOrNull()
+                        val second = if (first.first) database.await() else worker.await()
+                        second.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@coroutineScope it }
+
+                        when {
+                            first.second.isFailure && second.isFailure -> throw IllegalStateException(
+                                "Both catalogue sources failed. D1: ${first.second.exceptionOrNull()?.message}; " +
+                                    "Supabase: ${second.exceptionOrNull()?.message}",
+                                first.second.exceptionOrNull()
                             )
-                        }
-                        workerResult.isFailure -> {
-                            throw IllegalStateException(
-                                "Catalogue cache unavailable: ${workerResult.exceptionOrNull()?.message}"
+                            first.second.isFailure -> throw IllegalStateException(
+                                "Catalogue source failed: ${first.second.exceptionOrNull()?.message}"
                             )
-                        }
-                        databaseResult.isFailure -> {
-                            throw IllegalStateException(
-                                "Catalogue database unavailable: ${databaseResult.exceptionOrNull()?.message}"
+                            second.isFailure -> throw IllegalStateException(
+                                "Catalogue fallback failed: ${second.exceptionOrNull()?.message}"
                             )
+                            else -> emptyList()
                         }
-                        else -> emptyList()
+                    } finally {
+                        worker.cancel()
+                        database.cancel()
                     }
-            }
+                }
+            }.let { Result.success(it) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Result.failure(failure)
         }
     }
+
+    private suspend fun capture(block: () -> List<CatalogueTitle>): Result<List<CatalogueTitle>> =
+        try {
+            Result.success(block())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Result.failure(failure)
+        }
 
     private fun fetchFromWorker(query: String, limit: Int, offset: Int): List<CatalogueTitle> {
         val filters = if (query.isBlank()) "" else "&q=${encode(query.trim().take(100))}"
         val endpoint = "$CATALOGUE_WORKER_URL/api/titles?limit=$limit&offset=$offset$filters"
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 4500
-            readTimeout = 6500
+            connectTimeout = 5000
+            readTimeout = 7000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Cache-Control", "no-cache")
         }
         return try {
             val code = connection.responseCode
             val body = readResponse(connection, code)
-            check(code in 200..299) { "Catalogue cache returned HTTP $code: ${body.take(180)}" }
+            check(code in 200..299) { "D1 returned HTTP $code: ${body.take(220)}" }
             val json = JSONObject(body)
             val rows = json.optJSONArray("data")
                 ?: json.optJSONArray("results")
                 ?: json.optJSONArray("items")
-                ?: throw IllegalStateException("Catalogue cache response did not contain a data array.")
+                ?: throw IllegalStateException("D1 response did not contain a data/results/items array.")
             parseRows(rows)
         } finally {
             connection.disconnect()
@@ -96,16 +115,16 @@ class CatalogueRepository {
             "?select=$columns&order=created_at.desc,id.asc&limit=$limit&offset=$offset$filters"
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 4500
-            readTimeout = 6500
+            connectTimeout = 5000
+            readTimeout = 7000
             setRequestProperty("apikey", CATALOGUE_SUPABASE_KEY)
-            // Publishable keys belong in apikey; Authorization is reserved for a user JWT.
+            // A publishable key is an API key, not a JWT. Do not send it as Bearer auth.
             setRequestProperty("Accept", "application/json")
         }
         return try {
             val code = connection.responseCode
             val body = readResponse(connection, code)
-            check(code in 200..299) { "Supabase returned HTTP $code: ${body.take(180)}" }
+            check(code in 200..299) { "Supabase returned HTTP $code: ${body.take(220)}" }
             parseRows(JSONArray(body))
         } finally {
             connection.disconnect()
