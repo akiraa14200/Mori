@@ -51,9 +51,9 @@ class VideoRepository {
 
     private fun requestTrailers(sort: String, page: Int): List<RelatedVideo> {
         val query = """
-            query TrailerFeed($page: Int!, $sort: [MediaSort]!) {
-              Page(page: $page, perPage: 30) {
-                media(type: ANIME, sort: $sort, isAdult: false) {
+            query TrailerFeed(${'$'}page: Int!, ${'$'}sort: [MediaSort]!) {
+              Page(page: ${'$'}page, perPage: 30) {
+                media(type: ANIME, sort: ${'$'}sort, isAdult: false) {
                   id title { english romaji } trailer { id site }
                 }
               }
@@ -64,9 +64,9 @@ class VideoRepository {
 
     private fun requestSeasonalTrailers(season: String, year: Int, page: Int): List<RelatedVideo> {
         val query = """
-            query SeasonalTrailerFeed($page: Int!, $season: MediaSeason!, $year: Int!) {
-              Page(page: $page, perPage: 30) {
-                media(type: ANIME, season: $season, seasonYear: $year, sort: POPULARITY_DESC, isAdult: false) {
+            query SeasonalTrailerFeed(${'$'}page: Int!, ${'$'}season: MediaSeason!, ${'$'}year: Int!) {
+              Page(page: ${'$'}page, perPage: 30) {
+                media(type: ANIME, season: ${'$'}season, seasonYear: ${'$'}year, sort: POPULARITY_DESC, isAdult: false) {
                   id title { english romaji } trailer { id site }
                 }
               }
