@@ -178,8 +178,6 @@ private fun VideoCard(video: RelatedVideo, onWatch: () -> Unit) {
         ImageRequest.Builder(context)
             .data(thumbnailUrl)
             .crossfade(false)
-            .placeholder(ColorPainter(Color(0xFF292B31)))
-            .error(ColorPainter(Color(0xFF292B31)))
             .build()
     }
     Column(
@@ -195,6 +193,8 @@ private fun VideoCard(video: RelatedVideo, onWatch: () -> Unit) {
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = video.videoTitle,
+                    placeholder = ColorPainter(Color(0xFF292B31)),
+                    error = ColorPainter(Color(0xFF292B31)),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
