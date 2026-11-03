@@ -1,7 +1,7 @@
 name: Preview syntax check
 on:
   push:
-    branches: [remove-footer-credits, main]
+    branches: [remove-footer-credits, fix/priority-1-d1-catalogue, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
