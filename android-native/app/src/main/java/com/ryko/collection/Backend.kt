@@ -23,8 +23,14 @@ data class RykoRelatedVideo(
 data class RykoTitle(
     val id: String, val name: String, val type: String, val synopsis: String,
     val cover: String, val genres: List<String>, val status: String,
-    val year: Int?, val rating: String?, val popularity: Int
+    val year: Int?, val rating: String?, val popularity: Int,
+    val alternativeNames: List<String> = emptyList(), val themes: List<String> = emptyList(),
+    val chapters: String = "", val episodes: String = "", val author: String = "",
+    val artist: String = "", val studio: String = "", val country: String = "",
+    val trailerUrl: String = "", val banner: String = "", val season: String = "",
+    val sourceUrl: String = "", val featured: Boolean = false, val trending: Boolean = false
 )
+data class RykoCharacter(val id: String, val titleId: String, val name: String, val role: String, val description: String, val image: String)
 
 class Backend(context: Context) {
     companion object {
@@ -67,7 +73,7 @@ class Backend(context: Context) {
 
     suspend fun loadTitles(search: String = ""): List<RykoTitle> {
         val filter = if (search.isBlank()) "" else "&name=ilike.*${enc(search)}*"
-        val raw = request("/rest/v1/titles?select=id,name,media_type,synopsis,cover_url,genres,status,release_year,rating,popularity&order=popularity.desc&limit=60$filter", auth = false)
+        val raw = request("/rest/v1/titles?select=id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&order=popularity.desc&limit=60$filter", auth = false)
         val arr = JSONArray(raw)
         return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
     }
@@ -85,6 +91,15 @@ class Backend(context: Context) {
                 actionUrl = v.optString("action_url"), sortOrder = v.optInt("sort_order")
             )
         }
+    }
+
+    suspend fun loadCharacters(titleId: String): List<RykoCharacter> {
+        val raw = request("/rest/v1/characters?select=id,title_id,name,role,description,image_url&title_id=eq.$titleId&order=name.asc", auth = false)
+        val arr = JSONArray(raw)
+        return (0 until arr.length()).map { i -> arr.getJSONObject(i).let { c ->
+            RykoCharacter(c.optString("id"), c.optString("title_id"), c.optString("name"),
+                c.optString("role"), c.optString("description"), c.optString("image_url"))
+        } }
     }
 
     suspend fun signIn(mail: String, password: String) {
@@ -113,7 +128,7 @@ class Backend(context: Context) {
         if (ids.length() == 0) return emptyList()
         val joined = (0 until ids.length()).map { ids.getJSONObject(it).getString("title_id") }
             .joinToString(",") { "\"$it\"" }
-        val titles = request("/rest/v1/titles?select=id,name,media_type,synopsis,cover_url,genres,status,release_year,rating,popularity&id=in.${enc("($joined)")}&order=popularity.desc")
+        val titles = request("/rest/v1/titles?select=id,name,alternative_names,media_type,synopsis,cover_url,banner_url,genres,themes,status,release_year,season,rating,popularity,chapters,episodes,author,artist,studio,country,trailer_url,source_url,is_featured,is_trending&id=in.${enc("($joined)")}&order=popularity.desc")
         val arr = JSONArray(titles)
         return (0 until arr.length()).map { arr.getJSONObject(it).toTitle() }
     }
@@ -148,7 +163,12 @@ class Backend(context: Context) {
         synopsis = optString("synopsis"), cover = optString("cover_url"),
         genres = optJSONArray("genres").toStringList(), status = optString("status"),
         year = if (isNull("release_year")) null else optInt("release_year"),
-        rating = if (isNull("rating")) null else optString("rating"), popularity = optInt("popularity")
+        rating = if (isNull("rating")) null else optString("rating"), popularity = optInt("popularity"),
+        alternativeNames = optJSONArray("alternative_names").toStringList(), themes = optJSONArray("themes").toStringList(),
+        chapters = optString("chapters"), episodes = optString("episodes"), author = optString("author"),
+        artist = optString("artist"), studio = optString("studio"), country = optString("country"),
+        trailerUrl = optString("trailer_url"), banner = optString("banner_url"), season = optString("season"),
+        sourceUrl = optString("source_url"), featured = optBoolean("is_featured"), trending = optBoolean("is_trending")
     )
     private fun JSONArray?.toStringList(): List<String> {
         if (this == null) return emptyList()
