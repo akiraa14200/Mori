@@ -455,6 +455,55 @@ private fun RykoApp(api: Backend) {
 }
 
 @Composable
+private fun FeaturedCarousel(data: List<RykoTitle>, onSelect: (RykoTitle) -> Unit) {
+    val state = rememberLazyListState()
+    LaunchedEffect(data.size) {
+        if (data.size > 1) while (true) { delay(3500); val next = (state.firstVisibleItemIndex + 1) % data.size; state.animateScrollToItem(next) }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(state = state, contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(data, key = { it.id }) { title ->
+                Box(Modifier.fillParentMaxWidth(0.92f).height(230.dp).clickable { onSelect(title) }.background(Panel, RoundedCornerShape(20.dp))) {
+                    val image = title.banner.ifBlank { title.cover }
+                    if (image.isNotBlank()) AsyncImage(model = image, contentDescription = title.name, modifier = Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF0000000)))))
+                    Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                        Text("FEATURED • ${title.type.uppercase()}", color = Color(0xFFD0B8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Text(title.name, color = White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
+                        Text("${title.status}  •  ${title.year ?: "Year unknown"}", color = Muted, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            data.forEachIndexed { index, _ -> Box(Modifier.padding(horizontal = 3.dp).size(if (index == state.firstVisibleItemIndex) 18.dp else 6.dp, 6.dp).background(if (index == state.firstVisibleItemIndex) Color(0xFFB9A5FF) else Muted, RoundedCornerShape(20.dp))) }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    if (value.isNotBlank()) Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label.uppercase(), color = Muted, fontSize = 10.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+        Text(value, color = White, fontSize = 14.sp)
+        Divider(color = Panel)
+    }
+}
+
+@Composable
+private fun VideoPreview(url: String, platform: String, onPlay: (String, String) -> Unit) {
+    val video = RykoRelatedVideo(url, "", url, platform, "", "", "", "watch", url, 0)
+    Box(Modifier.fillMaxWidth().height(190.dp).clickable { onPlay(url, platform) }.background(Panel, RoundedCornerShape(14.dp))) {
+        val thumb = videoThumbnail(video)
+        if (thumb != null) AsyncImage(model = thumb, contentDescription = "Video preview", modifier = Modifier.fillMaxSize())
+        else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.PlayCircle, null, tint = White, modifier = Modifier.size(48.dp)) }
+        Surface(color = Color(0xD9000000), shape = RoundedCornerShape(30.dp), modifier = Modifier.align(Alignment.Center)) {
+            Icon(Icons.Default.PlayArrow, null, tint = White, modifier = Modifier.padding(10.dp).size(30.dp))
+        }
+    }
+}
+
+@Composable
 private fun Catalogue(
     data: List<RykoTitle>, busy: Boolean, error: String,
     onSelect: (RykoTitle) -> Unit, empty: String = "No titles found."
