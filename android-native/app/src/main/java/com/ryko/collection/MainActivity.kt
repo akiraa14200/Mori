@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -243,47 +245,14 @@ private fun RykoApp(api: Backend) {
                             }
                         }
                     }
-                    else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        item {
-                            Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(210.dp)
-                                .background(Brush.linearGradient(listOf(Color(0xFF29204A), Color(0xFF171A2A), Color(0xFF102B35))), RoundedCornerShape(24.dp))) {
-                                Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xEE090B10))))
-                                    .padding(18.dp)) {
-                                    Text("RYKO ORIGINAL DISCOVERY", color = Color(0xFFD0B8FF), fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
-                                    Text("Find your next\nfavourite story.", color = White, fontSize = 27.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Button(onClick = { tab = "Browse" }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B83F5), contentColor = Ink)) { Text("Explore now") }
-                                        Spacer(Modifier.width(8.dp))
-                                        TextButton(onClick = { mediaMode = "Manga"; tab = "Browse" }) { Text("Manga library  ›", color = White) }
-                                    }
-                                }
-                            }
-                        }
-                        item { HomeSection("Trending now", "Popular stories in the catalogue", titles.take(12), { selected = it }, { tab = "Browse" }) }
-                        item { HomeSection("Manga & manhwa", "Discover your next read", titles.filter { it.type.contains("manga", true) || it.type.contains("manhwa", true) }.take(12), { selected = it }, { mediaMode = "Manga"; tab = "Browse" }) }
-                        item { HomeSection("Anime collection", "Series worth adding to your list", titles.filter { it.type.contains("anime", true) || it.type.contains("tv", true) }.take(12), { selected = it }, { mediaMode = "Anime"; tab = "Browse" }) }
-                        item {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) { Text("From your video feed", color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text("Trailers and creator clips", color = Muted, fontSize = 11.sp) }
-                                TextButton(onClick = { tab = "Video" }) { Text("See all  ›", color = Color(0xFFB9A5FF)) }
-                            }
-                        }
-                        item {
-                            LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                items(relatedVideos.take(8), key = { it.id }) { v ->
-                                    Column(Modifier.width(230.dp).clickable { playingVideo = v }) {
-                                        Box(Modifier.fillMaxWidth().height(130.dp).background(Panel, RoundedCornerShape(14.dp))) {
-                                            val thumb = videoThumbnail(v)
-                                            if (thumb != null) AsyncImage(model = thumb, contentDescription = v.videoTitle, modifier = Modifier.fillMaxSize())
-                                            Icon(Icons.Default.PlayCircleFilled, null, tint = White, modifier = Modifier.align(Alignment.Center).size(42.dp))
-                                        }
-                                        Text(v.videoTitle.ifBlank { "Video from Ryko" }, color = White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(v.platform.replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp)
-                                    }
-                                }
-                            }
-                        }
+                    else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        item { FeaturedCarousel(titles.filter { it.featured }.ifEmpty { titles }.take(5), { selected = it }) }
+                        item { HomeSection("Top rated", "Highest-rated stories", titles.sortedByDescending { it.rating?.toFloatOrNull() ?: 0f }.take(15), { selected = it }, { tab = "Browse" }) }
+                        item { HomeSection("Trending now", "Popular this week", titles.filter { it.trending }.ifEmpty { titles.sortedByDescending { it.popularity } }.take(15), { selected = it }, { tab = "Browse" }) }
+                        item { HomeSection("Popular picks", "Stories readers are discovering", titles.sortedByDescending { it.popularity }.take(15), { selected = it }, { tab = "Browse" }) }
+                        item { HomeSection("Manga & manhwa", "Explore illustrated stories", titles.filter { it.type.contains("manga", true) || it.type.contains("manhwa", true) || it.type.contains("manhua", true) }.take(15), { selected = it }, { mediaMode = "Manga"; tab = "Browse" }) }
+                        item { HomeSection("Anime & movies", "Series and films to explore", titles.filter { it.type.contains("anime", true) || it.type.contains("tv", true) || it.type.contains("movie", true) }.take(15), { selected = it }, { mediaMode = "Anime"; tab = "Browse" }) }
+                        item { HomeSection("Latest additions", "Recently added to Ryko", titles.take(15), { selected = it }, { tab = "Browse" }) }
                     }
                 }
                 if (busy) LinearProgressIndicator(Modifier.align(Alignment.TopCenter).fillMaxWidth(), color = Gold, trackColor = Panel)
@@ -356,71 +325,131 @@ private fun RykoApp(api: Backend) {
         }
 
         selected?.let { title ->
+            var detailTab by remember(title.id) { mutableStateOf("Overview") }
+            var characters by remember(title.id) { mutableStateOf<List<RykoCharacter>>(emptyList()) }
             var comments by remember(title.id) { mutableStateOf<JSONArray?>(null) }
             var comment by remember(title.id) { mutableStateOf("") }
             var saved by remember(title.id) { mutableStateOf(library.any { it.id == title.id }) }
-            LaunchedEffect(title.id) { try { comments = api.comments(title.id) } catch (_: Exception) { } }
-            AlertDialog(
-                onDismissRequest = { selected = null },
-                title = { Text(title.name, color = White, fontWeight = FontWeight.Bold) },
-                text = {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.heightIn(max = 520.dp)) {
+            LaunchedEffect(title.id) {
+                try { characters = api.loadCharacters(title.id) } catch (_: Exception) { }
+                try { comments = api.comments(title.id) } catch (_: Exception) { }
+            }
+            Dialog(onDismissRequest = { selected = null }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+                Column(Modifier.fillMaxSize().background(Ink)) {
+                    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 22.dp)) {
                         item {
-                            if (title.cover.isNotBlank()) AsyncImage(
-                                model = title.cover, contentDescription = title.name,
-                                modifier = Modifier.fillMaxWidth().height(190.dp)
-                            )
-                            Text("${title.type} • ${title.year ?: "—"} • ${title.status}", color = Gold, fontSize = 11.sp)
-                            if (!title.rating.isNullOrBlank()) Text("Rating  ${title.rating}/10", color = Muted, fontSize = 12.sp)
-                            Text(title.synopsis.ifBlank { "No synopsis available." }, color = White, fontSize = 13.sp)
-                            Text(title.genres.joinToString(" • "), color = Gold, fontSize = 11.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = {
-                                scope.launch {
-                                    try {
-                                        if (saved) {
-                                            api.removeFromLibrary(title.id)
-                                            library = library.filterNot { it.id == title.id }
-                                        } else {
-                                            api.saveToLibrary(title.id)
-                                            library = library + title
+                            Box(Modifier.fillMaxWidth().height(260.dp)) {
+                                val hero = title.banner.ifBlank { title.cover }
+                                if (hero.isNotBlank()) AsyncImage(model = hero, contentDescription = title.name, modifier = Modifier.fillMaxSize())
+                                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Ink))))
+                                IconButton(onClick = { selected = null }, modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) { Icon(Icons.Default.ArrowBack, null, tint = White) }
+                                Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
+                                    Text(title.type.uppercase() + (title.year?.let { " • $it" } ?: ""), color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
+                                    Text(title.name, color = White, fontSize = 27.sp, lineHeight = 31.sp, fontWeight = FontWeight.ExtraBold)
+                                    if (!title.rating.isNullOrBlank()) Text("★  ${title.rating} / 10     •     ${title.status}", color = Gold, fontSize = 13.sp)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(onClick = { playingVideo = relatedVideos.firstOrNull { it.titleId == title.id } }, enabled = relatedVideos.any { it.titleId == title.id } || title.trailerUrl.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B83F5), contentColor = Ink)) { Icon(Icons.Default.PlayArrow, null); Text(" Play trailer") }
+                                        OutlinedButton(onClick = {
+                                            scope.launch { try { if (saved) { api.removeFromLibrary(title.id); library = library.filterNot { it.id == title.id } } else { api.saveToLibrary(title.id); library = library + title }; saved = !saved } catch (e: Exception) { error = e.message ?: "Could not update library" } }
+                                        }) { Icon(Icons.Default.Bookmark, null); Text(if (saved) " Saved" else " Add to list") }
+                                    }
+                                }
+                            }
+                        }
+                        item {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("Overview", "Characters", "Details", "Comments").forEach { name ->
+                                    val icon = when (name) { "Overview" -> Icons.Default.Info; "Characters" -> Icons.Default.Groups; "Details" -> Icons.Default.Description; else -> Icons.Default.ChatBubbleOutline }
+                                    Surface(onClick = { detailTab = name }, color = if (detailTab == name) Color(0xFF29213D) else Panel, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) {
+                                        Column(Modifier.padding(vertical = 11.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(icon, null, tint = if (detailTab == name) Color(0xFFB9A5FF) else Muted, modifier = Modifier.size(19.dp))
+                                            Text(name, color = if (detailTab == name) White else Muted, fontSize = 9.sp, maxLines = 1)
                                         }
-                                        saved = !saved
-                                    } catch (e: Exception) { error = e.message ?: "Could not update library" }
-                                }
-                            }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
-                                modifier = Modifier.fillMaxWidth()) {
-                                Text(if (saved) "Remove from library" else "Add to library")
-                            }
-                            Text("COMMUNITY", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                        }
-                        if (comments == null) item { Text("Loading comments…", color = Muted) }
-                        else items((0 until (comments?.length() ?: 0)).map { comments!!.getJSONObject(it) }) { c ->
-                            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
-                                Column(Modifier.padding(10.dp)) {
-                                    Text(c.optString("body"), color = White, fontSize = 13.sp)
-                                    Text(c.optString("created_at").take(10), color = Muted, fontSize = 10.sp)
+                                    }
                                 }
                             }
                         }
-                        if (api.signedIn) item {
-                            OutlinedTextField(comment, { comment = it }, modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Write a comment") })
-                            TextButton(enabled = comment.isNotBlank(), onClick = {
-                                scope.launch {
-                                    try {
-                                        api.postComment(title.id, comment)
-                                        comment = ""
-                                        comments = api.comments(title.id)
-                                    } catch (e: Exception) { error = e.message ?: "Could not post comment" }
+                        when (detailTab) {
+                            "Overview" -> {
+                                item {
+                                    Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Text("THE STORY", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
+                                        Text("Overview", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                                        Text(title.synopsis.ifBlank { "No description available." }, color = Muted, fontSize = 14.sp, lineHeight = 23.sp)
+                                        Text("OFFICIAL PREVIEW", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
+                                        Text("Trailer", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                        val trailer = title.trailerUrl.ifBlank { relatedVideos.firstOrNull { it.titleId == title.id && it.platform == "youtube" }?.videoUrl.orEmpty() }
+                                        if (trailer.isNotBlank()) VideoPreview(trailer, "youtube", { url, platform -> playingVideo = RykoRelatedVideo("trailer-${title.id}", title.id, url, platform, "Official trailer", "", "", "watch", url, 0) })
+                                        else Text("No trailer added for this entry.", color = Muted, fontSize = 12.sp)
+                                        Text("RELATED VIDEOS", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontSize = 11.sp)
+                                        relatedVideos.filter { it.titleId == title.id }.forEach { v ->
+                                            VideoPreview(v.videoUrl, v.platform, { url, platform -> playingVideo = v })
+                                            Text(v.videoTitle.ifBlank { v.platform }, color = White, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
                                 }
-                            }) { Text("Post comment", color = Gold) }
-                        } else item { Text("Sign in to join the discussion.", color = Muted, fontSize = 12.sp) }
+                            }
+                            "Characters" -> {
+                                if (characters.isEmpty()) item { Text("No characters added yet.", color = Muted, modifier = Modifier.padding(20.dp)) }
+                                else item {
+                                    Column(Modifier.padding(horizontal = 14.dp)) {
+                                        Text("${characters.size} characters", color = Muted, fontSize = 12.sp)
+                                        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.heightIn(max = 900.dp), userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(9.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            gridItems(characters) { ch ->
+                                                var show by remember(ch.id) { mutableStateOf(false) }
+                                                Column(Modifier.clickable { show = true }, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                    AsyncImage(model = ch.image, contentDescription = ch.name, modifier = Modifier.fillMaxWidth().height(132.dp).background(Panel, RoundedCornerShape(12.dp)))
+                                                    Text(ch.name, color = White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                                                    Text(ch.role, color = Muted, fontSize = 10.sp)
+                                                }
+                                                if (show) AlertDialog(onDismissRequest = { show = false }, title = { Text(ch.name, color = White) }, text = { Column { AsyncImage(model = ch.image, contentDescription = ch.name, modifier = Modifier.fillMaxWidth().height(210.dp)); Text(ch.role, color = Gold); Text(ch.description, color = Muted) } }, confirmButton = { TextButton(onClick = { show = false }) { Text("Close") } }, containerColor = Panel)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            "Details" -> item {
+                                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text("INFORMATION", color = Color(0xFFB9A5FF), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                                    DetailRow("Name", title.name)
+                                    DetailRow("Alternative names", title.alternativeNames.joinToString(", "))
+                                    DetailRow("Status", title.status)
+                                    DetailRow("Category", title.type)
+                                    DetailRow("Genres", title.genres.joinToString(", "))
+                                    DetailRow("Themes", title.themes.joinToString(", "))
+                                    DetailRow("Studio", title.studio)
+                                    DetailRow("Artist", title.artist)
+                                    DetailRow("Author", title.author)
+                                    DetailRow("Release", listOfNotNull(title.season.takeIf { it.isNotBlank() }, title.year?.toString(), title.country.takeIf { it.isNotBlank() }).joinToString(" • "))
+                                    DetailRow("Chapters", title.chapters)
+                                    DetailRow("Episodes", title.episodes)
+                                    DetailRow("Source", title.sourceUrl)
+                                }
+                            }
+                            else -> {
+                                if (comments == null) item { Text("Loading comments…", color = Muted, modifier = Modifier.padding(18.dp)) }
+                                else items((0 until (comments?.length() ?: 0)).map { comments!!.getJSONObject(it) }) { c ->
+                                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 7.dp).background(Panel, RoundedCornerShape(12.dp)).padding(12.dp)) {
+                                        Text(c.optString("body"), color = White, fontSize = 13.sp)
+                                        Text(c.optString("created_at").take(10), color = Muted, fontSize = 10.sp)
+                                    }
+                                }
+                                if (api.signedIn) item {
+                                    Column(Modifier.padding(16.dp)) {
+                                        OutlinedTextField(comment, { comment = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Write a comment") })
+                                        Button(enabled = comment.isNotBlank(), onClick = { scope.launch { try { api.postComment(title.id, comment); comment = ""; comments = api.comments(title.id) } catch (e: Exception) { error = e.message ?: "Could not post comment" } } }) { Text("Post comment") }
+                                    }
+                                } else item { Text("Sign in to join the discussion.", color = Muted, modifier = Modifier.padding(18.dp)) }
+                            }
+                        }
                     }
-                },
-                confirmButton = { TextButton(onClick = { selected = null }) { Text("Close", color = Gold) } },
-                containerColor = Panel
-            )
+                    Row(Modifier.fillMaxWidth().background(Panel).padding(10.dp), horizontalArrangement = Arrangement.SpaceAround) {
+                        listOf("Home", "Browse", "Video", "Library", "Account").forEach { name ->
+                            TextButton(onClick = { selected = null; tab = name }) { Text(name, color = if (name == "Home") Color(0xFFB9A5FF) else Muted, fontSize = 10.sp) }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -434,7 +463,7 @@ private fun Catalogue(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(if (error.isBlank()) empty else "Catalogue unavailable. Try again.", color = Muted)
         }
-    } else LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
+    } else LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         gridItems(data) { title -> TitleCard(title, { onSelect(title) }, Modifier.fillMaxWidth()) }
