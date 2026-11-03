@@ -8,11 +8,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class CatalogueRepository {
-    suspend fun getTitles(query: String = "", limit: Int = 60): Result<List<CatalogueTitle>> =
+    suspend fun getTitles(query: String = "", limit: Int = 30, offset: Int = 0): Result<List<CatalogueTitle>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-                val endpoint = "https://mori-data.akiraa142007.workers.dev/api/titles?limit=$limit" +
+                val endpoint = "https://mori-data.akiraa142007.workers.dev/api/titles?limit=$limit&offset=$offset" +
                     if (query.isBlank()) "" else "&q=$encodedQuery"
                 val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
