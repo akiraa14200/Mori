@@ -1524,7 +1524,7 @@ async function loadTitles({force=false}={}){
    publish();
    // Fetch later pages in small batches: faster than serial requests without
    // creating a large burst against Supabase.
-   for(let from=500;from<100000;from+=1500){
+   for(let from=500;firstPage.length===500&&from<100000;from+=1500){
     const pages=await Promise.all([from,from+500,from+1000].map(loadPage));
     let finished=false;
     for(const rows of pages){collected.push(...rows);if(rows.length<500){finished=true;break}}
