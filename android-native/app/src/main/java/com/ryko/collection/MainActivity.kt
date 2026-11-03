@@ -31,6 +31,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.webkit.WebView
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
+import android.webkit.WebViewClient
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
