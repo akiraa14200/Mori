@@ -287,7 +287,7 @@ private fun InAppWebPlayer(
     youtubeVideoId: String?,
     modifier: Modifier = Modifier
 ) {
-    val player = remember { mutableStateOf<WebView?>(null) }
+    val playerRef = remember { arrayOfNulls<WebView>(1) }
     AndroidView(
         modifier = modifier.background(Color.Black),
         factory = { context ->
@@ -309,7 +309,7 @@ private fun InAppWebPlayer(
                         return scheme != "https" && scheme != "http"
                     }
                 }
-                player.value = this
+                playerRef[0] = this
                 if (youtubeVideoId != null) {
                     val html = """
                         <!doctype html>
@@ -340,15 +340,15 @@ private fun InAppWebPlayer(
         },
         update = { }
     )
-    DisposableEffect(player.value) {
+    DisposableEffect(videoUrl, youtubeVideoId) {
         onDispose {
-            player.value?.apply {
+            playerRef[0]?.apply {
                 stopLoading()
                 loadUrl("about:blank")
                 removeAllViews()
                 destroy()
             }
-            player.value = null
+            playerRef[0] = null
         }
     }
 }
