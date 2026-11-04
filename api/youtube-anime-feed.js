@@ -34,7 +34,7 @@ async function resolveChannelId(source) {
   const task = (async () => {
     const response = await fetch("https://www.youtube.com/@" + encodeURIComponent(source.handle), {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; RykoCollection/1.0)", "Accept-Language": "en-US,en;q=0.8" },
-      signal: AbortSignal.timeout(6500)
+      signal: AbortSignal.timeout(4200)
     });
     if (!response.ok) throw new Error("Channel page returned HTTP " + response.status);
     const html = await response.text();
@@ -52,7 +52,7 @@ async function fetchChannel(source) {
     const channelId = await resolveChannelId(source);
     const response = await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId), {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; RykoCollection/1.0)", "Accept": "application/atom+xml,application/xml,text/xml" },
-      signal: AbortSignal.timeout(7500)
+      signal: AbortSignal.timeout(4500)
     });
     if (!response.ok) throw new Error("Feed returned HTTP " + response.status);
     const xml = await response.text();
