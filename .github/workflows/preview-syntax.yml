@@ -1,7 +1,7 @@
 name: Preview syntax check
 on:
   push:
-    branches: [feature/videos-feed]
+    branches: [feature/videos-feed, feature/expanded-anime-video-catalogue]
   pull_request:
     branches: [main]
 jobs:
@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check anime video feed API syntax
+        run: node --check api/youtube-anime-feed.js
       - name: Check inline JavaScript in index.html
         run: |
           node --input-type=commonjs <<'NODE'
