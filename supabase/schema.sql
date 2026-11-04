@@ -65,8 +65,10 @@ create table if not exists public.profiles (
  avatar_url text not null default '',
  updated_at timestamptz not null default now(),
  bio text not null default '' check (char_length(bio) <= 280),
- banner_url text not null default ''
+ banner_url text not null default '',
+ public_lists boolean not null default true
 );
+alter table public.profiles add column if not exists public_lists boolean not null default true;
 
 create table if not exists public.reader_follows (
  follower_id uuid not null references auth.users(id) on delete cascade,
