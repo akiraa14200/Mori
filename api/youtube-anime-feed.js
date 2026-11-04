@@ -12,7 +12,11 @@ const SOURCES = [
   { key: "trigger", name: "TRIGGER", handle: "trigger_inc", category: "Animation studios", channelUrl: "https://www.youtube.com/@trigger_inc/videos" },
   { key: "toei-animation", name: "Toei Animation", handle: "ToeiAnimationjp", id: "UCLhgIX2L5ZCaWdlaxR_oTAg", category: "Animation studios", channelUrl: "https://www.youtube.com/@ToeiAnimationjp/videos" },
   { key: "sunrise", name: "SUNRISE", handle: "SUNRISE_web", category: "Animation studios", channelUrl: "https://www.youtube.com/@SUNRISE_web/videos" },
-  { key: "production-ig", name: "Production I.G", handle: "ProductionIG", category: "Animation studios", channelUrl: "https://www.youtube.com/@ProductionIG/videos" }
+  { key: "production-ig", name: "Production I.G", handle: "ProductionIG", category: "Animation studios", channelUrl: "https://www.youtube.com/@ProductionIG/videos" },
+  { key: "muse-asia", name: "Muse Asia", handle: "MuseAsia", category: "Official anime publishers", channelUrl: "https://www.youtube.com/@MuseAsia/videos" },
+  { key: "crunchyroll", name: "Crunchyroll", handle: "Crunchyroll", category: "Official anime publishers", channelUrl: "https://www.youtube.com/@Crunchyroll/videos" },
+  { key: "toho-animation", name: "TOHO animation", handle: "TOHOanimation", category: "Official anime publishers", channelUrl: "https://www.youtube.com/@TOHOanimation/videos" },
+  { key: "kadokawa-anime", name: "KADOKAWAanime", handle: "KADOKAWAanime", category: "Official anime publishers", channelUrl: "https://www.youtube.com/@KADOKAWAanime/videos" }
 ];
 
 const channelIdCache = new Map();
