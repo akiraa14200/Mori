@@ -52,7 +52,7 @@ async function fetchChannel(source) {
     });
     if (!response.ok) throw new Error("Feed returned HTTP " + response.status);
     const xml = await response.text();
-    const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\\/entry>/g)].slice(0, 15);
+    const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].slice(0, 15);
     const videos = entries.map((match) => {
       const item = match[1];
       const videoId = tag(item, "yt:videoId");
